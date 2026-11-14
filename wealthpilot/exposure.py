@@ -17,6 +17,12 @@ import pandas as pd
 SINGLE_SECURITY_CLASSES = {"equity", "crypto"}
 
 
+def pct(x: float) -> str:
+    """7.5% stays 7.5%, 10.0% prints as 10%."""
+    s = f"{x:.1%}"
+    return s.replace(".0%", "%")
+
+
 @dataclass(frozen=True)
 class Limits:
     max_single_security: float = 0.10   # one stock or one crypto asset
@@ -93,18 +99,18 @@ def alerts(weights: dict[str, float], universe: pd.DataFrame, prices: pd.DataFra
     for t in w.index[u["asset_class"].isin(SINGLE_SECURITY_CLASSES)]:
         if w[t] > limits.max_single_security:
             out.append(Alert("SINGLE_SECURITY", "warning", t, w[t], limits.max_single_security,
-                             f"{t} is {w[t]:.0%} of the portfolio (limit {limits.max_single_security:.0%})."))
+                             f"{t} is {pct(w[t])} of the portfolio (limit {pct(limits.max_single_security)})."))
 
     stocks = w[u["asset_class"] == "equity"]
     for sector, share in stocks.groupby(u.loc[stocks.index, "sector"]).sum().items():
         if share > limits.max_sector:
             out.append(Alert("SECTOR", "warning", sector, share, limits.max_sector,
-                             f"Individual {sector} stocks are {share:.0%} of the portfolio (limit {limits.max_sector:.0%})."))
+                             f"Individual {sector} stocks are {pct(share)} of the portfolio (limit {pct(limits.max_sector)})."))
 
     crypto = float(w[u["asset_class"] == "crypto"].sum())
     if crypto > limits.max_crypto:
         out.append(Alert("CRYPTO", "warning", "crypto", crypto, limits.max_crypto,
-                         f"Crypto assets are {crypto:.0%} of the portfolio (limit {limits.max_crypto:.0%})."))
+                         f"Crypto assets are {pct(crypto)} of the portfolio (limit {pct(limits.max_crypto)})."))
 
     for ccy, share in exposure(w.to_dict(), universe, "currency").items():
         if share > limits.max_currency:
