@@ -63,7 +63,8 @@ def handle(event: dict, s3, table, llm=None) -> dict:
         session.profile = build_profile(p["answers"], Preferences(
             esg=prefs.get("esg", "none"), excluded_sectors=tuple(prefs.get("excluded_sectors", ())),
             crypto=prefs.get("crypto", "no"), region=prefs.get("region", "balanced"),
-            themes=tuple(prefs.get("themes", ()))))
+            themes=tuple(prefs.get("themes", ())), simplicity=bool(prefs.get("simplicity", False)),
+            values=tuple(prefs.get("values", ()))))
         session.amount = float(p.get("amount", session.amount))
     if state.get("portfolio"):
         session.portfolio = {k: float(v) for k, v in state["portfolio"].items()}
@@ -77,7 +78,9 @@ def handle(event: dict, s3, table, llm=None) -> dict:
                                             "excluded_sectors": list(session.profile.preferences.excluded_sectors),
                                             "crypto": session.profile.preferences.crypto,
                                             "region": session.profile.preferences.region,
-                                            "themes": list(session.profile.preferences.themes)}}
+                                            "themes": list(session.profile.preferences.themes),
+                                            "simplicity": session.profile.preferences.simplicity,
+                                            "values": list(session.profile.preferences.values)}}
     if session.portfolio:
         state["portfolio"] = session.portfolio
     store.save_state(session_id, state)

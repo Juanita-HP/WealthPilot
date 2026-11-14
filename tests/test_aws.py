@@ -72,10 +72,11 @@ def test_lambda_turn_persists_state_and_receipts(tmp_path, monkeypatch):
     answers = [{"question": k, "answer": v} for k, v in ROBERT.items()]
     llm = ScriptedLLM([
         [("build_profile", {"answers": answers, "esg": "none", "excluded_sectors": [], "crypto": "no",
-                            "region": "balanced", "themes": [], "amount": 150000})],
+                            "region": "balanced", "themes": [], "amount": 150000, "simplicity": False, "values": []})],
         [("propose_allocation", {})],
         "Your allocation is ready {R?} {R?}.",
         "No major objection.",
+        "Debate: nothing to resolve.",
     ])
     out = lh.handle({"session_id": "demo", "question": "Build my plan"}, FakeS3(), table, llm=llm)
     assert out["session_id"] == "demo" and len(out["receipts"]) == 2
@@ -85,6 +86,7 @@ def test_lambda_turn_persists_state_and_receipts(tmp_path, monkeypatch):
     assert len(turns) == 1
 
     # second turn: the profile and portfolio come back from DynamoDB, no rebuild needed
-    llm2 = ScriptedLLM([[("review_allocation", {"weights": []})], "Reviewed {R?}.", "Nothing to add."])
+    llm2 = ScriptedLLM([[("review_allocation", {"weights": []})], "Reviewed {R?}.", "Nothing to add.",
+                        "Debate: nothing to resolve."])
     out2 = lh.handle({"session_id": "demo", "question": "Any risk in my plan?"}, FakeS3(), table, llm=llm2)
     assert out2["receipts"][0]["tool"] == "review_allocation" and out2["receipts"][0]["error"] is None

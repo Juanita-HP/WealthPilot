@@ -6,6 +6,9 @@ Roles, and why each exists:
   drafts the answer with a receipt id after every number.
 * Devil's advocate (LLM + review tools): challenges the request AND the draft
   with evidence, including the counterpoint when the data favors the request.
+* Debate: the advisor, as arbiter, rewrites its answer responding to each
+  challenge (accepted or rejected with evidence) - the "debate agent" idea from
+  the BNC kick-off.
 * Verifier (code, not a model): checks every number against the receipts and
   applies governance rules. If it fails, the advisor gets one revision with the
   list of problems; anything still unverified is shown to the user as such.
@@ -31,9 +34,16 @@ ADVISOR_SYSTEM = """You are WealthPilot's advisor agent, part of an educational 
 How to work:
 - Get every number from a tool. Never compute, estimate or recall a figure yourself.
 - Each tool result carries a receipt id. After every sentence that states a number, cite the receipt, for example: "The worst 12 months lost 8.2% [R4]." A sentence without a receipt must not contain figures.
-- If the question needs an investor profile and there is none, ask for the missing questionnaire answers (question ids and options are in the build_profile tool) instead of guessing. Build the profile once the answers are given.
-- When a request conflicts with the profile, say so plainly and explain it with tool results. Do not simply agree.
-- Separate what the data shows from assumptions (planning assumptions, hypothetical scenarios) and from uncertainty. Use three short sections after a direct answer: "Facts", "Assumptions", "Uncertainty and limits".
+- Start from the investor, not the product: goals, horizon of each goal, capacity and tolerance, constraints, then preferences. Preferences (ESG, values, simplicity, themes) apply inside the constraints, never above them.
+- If the question needs a profile and there is none, ask for the missing questionnaire answers (ids and options are in build_profile) instead of guessing. When the investor names goals, use plan_goals: each goal has its own horizon and sub-portfolio.
+- When a request conflicts with the profile, say so plainly, explain it with tool results, and ask whether the profile or the request should change. Do not simply agree.
+- Structure the answer like this, with short sections:
+  1. Answer (two or three sentences)
+  2. Data used (what, which period, which currency, which source)
+  3. Finding and analysis
+  4. Proposal
+  5. Why this choice, and its limits (what is a fact, what is an assumption)
+  6. What would change this answer (use what_would_change)
 - Adapt depth to the investor's experience: none or beginner, plain words and fewer numbers; intermediate, standard; advanced, include volatility, drawdown dates and Sharpe ratios.
 - Be concise. Reply in the language of the investor's question."""
 
@@ -48,6 +58,12 @@ Rules:
 - End with one question for the investor.
 - If nothing deserves a challenge, say so in one sentence.
 - At most about 150 words. Do not repeat the draft. Reply in the language of the investor's question."""
+
+DEBATE_PROMPT = """The devil's advocate challenged your draft:
+
+{critique}
+
+Act as the arbiter of this debate. Rewrite your complete answer so that it responds to each challenge: accept it and change the proposal, or reject it with evidence. Add a short section "Debate" listing each challenge and how it was resolved. Same rules: every number from a tool, with its receipt."""
 
 REVISION_PROMPT = """The verifier found problems in your answer. Rewrite the complete answer and fix every item:
 {problems}
@@ -123,7 +139,7 @@ def _receipt_index(session: Session) -> str:
 
 
 def ask(session: Session, question: str, llm: LLM, advocate: bool = True, max_revisions: int = 1,
-        effort: str | None = None) -> AgentAnswer:
+        effort: str | None = None, debate: bool = True) -> AgentAnswer:
     trace: list[dict] = []
     advisor_msgs = [{"role": "user", "content": f"{_context(session)}\n\nQuestion: {question}"}]
     draft, advisor_msgs = run_agent(llm, session, "advisor", ADVISOR_SYSTEM, advisor_msgs, trace, effort)
@@ -134,6 +150,11 @@ def ask(session: Session, question: str, llm: LLM, advocate: bool = True, max_re
                      f"{_context(session)}\n\nInvestor question: {question}\n\nAdvisor draft:\n{draft}\n\n"
                      f"Receipts so far:\n{_receipt_index(session)}"}]
         critique, _ = run_agent(llm, session, "advocate", ADVOCATE_SYSTEM, adv_msgs, trace, effort)
+        if debate and critique:
+            # Arbitration: the advisor must answer each challenge, keeping or changing its proposal with evidence.
+            advisor_msgs.append({"role": "user", "content": DEBATE_PROMPT.format(critique=critique)})
+            draft, advisor_msgs = run_agent(llm, session, "advisor", ADVISOR_SYSTEM, advisor_msgs, trace, effort)
+            trace.append({"agent": "arbiter", "event": "debate_resolved"})
 
     report = verify(draft + "\n" + critique, session.ledger)
     revisions = 0

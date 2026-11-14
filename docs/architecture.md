@@ -2,6 +2,23 @@
 
 WealthPilot is an educational investment simulation. It builds an investor profile, proposes a fictional allocation, replays it through real market history, challenges the investor's requests and its own proposals, and shows where every number comes from. It never executes trades and never tells anyone to buy or sell.
 
+## What the BNC workshops asked for, and where it is
+
+| Point raised (finance workshop and case kick-off) | In WealthPilot |
+|---|---|
+| People invest for goals; one portfolio holds several horizons; horizon is the goal's, not the person's age | `goals.py`: a sub-portfolio and account suggestion per goal, level capped by the goal's horizon, cash-only under 2 years, emergency fund always cash-like |
+| Capacity to absorb risk is not tolerance | `profile.py`: two separate scores; the level follows the lower |
+| Preferences sit inside constraints, never above | `profile.constraints_for`: preferences (ESG, values, crypto interest, simplicity) are applied within the level's limits and flagged when a limit wins |
+| Kinds of risk: market, credit, liquidity, currency, concentration, inflation | `risks.py`: risk map with level, number and reason for each |
+| Diversify across asset classes, regions, sectors, management style | strategist sleeves, exposure alerts, risk map |
+| Explain data used, why this choice, limits, and what would change the answer | advisor answer structure; `whatif.py` computes the conditions |
+| Data quality: date, currency, revenue vs earnings, fund type, missing data and hypotheses | every value carries provenance (`ticker.py`), CAD conversion, point-in-time rules, "Known data issues" below |
+| Amira: high risk is not "anything goes" | level 5 still caps stocks at 95%, crypto at 10%, one stock at 15%; diversification alerts |
+| Mateo: non-financial criteria beyond ESG | values (e.g. no fossil fuels), simplicity preference, ESG-screened fund, home-region preference |
+| Robert: check coherence, question the request or the profile | devil's advocate with counterpoint, tipping points, more-conservative-only level override |
+| Agents with clear roles; a debate agent can arbitrate | advisor, devil's advocate, debate (arbitration), verifier |
+| Say when the answer is uncertain; separate facts, hypotheses, scenarios | answer sections, labeled hypotheses, verifier, model card showing the ML model lost to simple rules |
+
 ## Design principle
 
 **Numbers come from tested code; the language model orchestrates and explains.** Every figure in an answer is produced by a deterministic tool, recorded as a numbered receipt, cited in the answer, and checked by a verifier written in code. A model cannot invent a justification after the fact without the verifier noticing.
@@ -68,6 +85,15 @@ Explainability and governance, the two "possibilities" of the brief, are built i
 | Yahoo Finance via yfinance (live, cached with retrieval time) | Fundamentals, analyst estimates | Ticker dashboard; analyst figures labeled as third-party opinion |
 
 Point-in-time rules: monthly macro data is usable from the first day of the second month after its reference month; daily data from the next business day; trading decisions execute at the next close.
+
+## Known data issues
+
+- CNQ.TO shows a 1.021 "split" on 2022-08-22 next to a special dividend; it is not a real share split (organizers' note). Adjusted prices are used for returns.
+- Yahoo's adjusted closes are back-adjusted and change when re-downloaded; the starter snapshot is dated 2026-11-13.
+- No FX rate on Canadian holidays: the last rate is carried forward.
+- ETF trading volume understates ETF liquidity, so volume-based liquidity tests apply to individual stocks only.
+- yfinance histories can start a day after a 5-year window; returns use the first available price (found on live data, tested).
+- Financial statements of banks make debt/equity meaningless (deposits); the growth score does not score it for financials.
 
 ## Limits
 

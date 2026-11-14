@@ -12,7 +12,7 @@ from wealthpilot.agents.llm import ScriptedLLM
 
 ROBERT_ANSWERS = [{"question": k, "answer": v} for k, v in ROBERT.items()]
 BUILD = ("build_profile", {"answers": ROBERT_ANSWERS, "esg": "none", "excluded_sectors": [], "crypto": "no",
-                           "region": "balanced", "themes": [], "amount": 150000})
+                           "region": "balanced", "themes": [], "amount": 150000, "simplicity": False, "values": []})
 
 
 # ----------------------------------------------------------------------------- verifier units
@@ -117,7 +117,7 @@ def test_full_flow_grounded_answer_passes(session):
         [("review_trade", {"symbol": "TSLA", "weight": 0.3})],
         f"With 30% in TSLA the worst fall would have reached {_fmt(after)} {{R?}}. Is that acceptable?",
     ])
-    ans = orch.ask(session, "Can I put 30% in Tesla?", llm)
+    ans = orch.ask(session, "Can I put 30% in Tesla?", llm, debate=False)
     assert ans.report.passed, ans.report.to_dict()
     assert ans.revisions == 0
     assert [r.tool for r in session.ledger.receipts] == ["build_profile", "propose_allocation", "review_trade"]
@@ -134,7 +134,7 @@ def test_unsupported_number_triggers_one_revision(session):
         "No major objection.",                                        # advocate
         "Robert's profile is moderately conservative {R?}.",          # revision without the bad figure
     ])
-    ans = orch.ask(session, "What is my profile?", llm)
+    ans = orch.ask(session, "What is my profile?", llm, debate=False)
     assert ans.revisions == 1 and ans.report.passed
     revision_msg = llm.calls[3]["messages"][-1]["content"]
     assert "99.9" in revision_msg and "not found" in revision_msg
@@ -145,7 +145,7 @@ def test_remaining_problems_are_shown_not_hidden(session):
     llm = ScriptedLLM([
         "TSLA always returns 40% a year.", "TSLA always returns 40% a year.", "Nothing to add.",
     ])
-    ans = orch.ask(session, "Tell me about TSLA", llm)
+    ans = orch.ask(session, "Tell me about TSLA", llm, debate=False)
     assert not ans.report.passed
     assert 'Not verified: "40%"' in ans.text
 
@@ -157,3 +157,36 @@ def test_tool_errors_are_returned_to_the_model(session):
     assert session.ledger.get(rid).error
     rid, content, is_error = tl.call_tool(session, "advocate", "build_profile", {})
     assert is_error and "not available" in content
+
+
+@requires_starter
+def test_debate_makes_the_advisor_answer_the_challenges(session):
+    llm = ScriptedLLM([
+        [BUILD],
+        "Your profile is ready {R?}.",                                   # draft
+        [("review_trade", {"symbol": "TSLA", "weight": 0.3})],
+        "This request breaks the profile limits {R?}. Would you accept a smaller position?",  # advocate
+        "Debate: the advocate's objection is accepted; the request is not compatible with the profile.",  # arbiter
+    ])
+    ans = orch.ask(session, "Can I put 30% in Tesla?", llm)
+    assert "Debate" in ans.draft and "accepted" in ans.draft
+    assert any(t.get("agent") == "arbiter" for t in ans.trace)
+    assert "challenged your draft" in llm.calls[-1]["messages"][-1]["content"]
+
+
+@requires_starter
+def test_goal_plan_tool_and_risk_map(session):
+    tl.call_tool(session, "advisor", *BUILD)
+    goals = [{"name": "Cushion", "type": "emergency_fund", "horizon_years": 0, "target_amount": 15000,
+              "current_amount": 15000, "monthly_contribution": 0},
+             {"name": "Retirement", "type": "retirement", "horizon_years": 4, "target_amount": 300000,
+              "current_amount": 135000, "monthly_contribution": 500}]
+    rid, content, err = tl.call_tool(session, "advisor", "plan_goals", {"goals_list": goals})
+    assert not err and session.portfolio
+    out = session.ledger.get(rid).output
+    assert out["goals"][0]["weights"] == {"ZST.TO": 1.0}
+    rid, content, err = tl.call_tool(session, "advocate", "risk_map", {"weights": []})
+    kinds = {r["kind"] for r in session.ledger.get(rid).output["risks"]}
+    assert kinds == {"market", "credit", "liquidity", "currency", "concentration", "inflation"}
+    rid, content, err = tl.call_tool(session, "advisor", "what_would_change", {"goals_list": goals})
+    assert session.ledger.get(rid).output["conditions"]

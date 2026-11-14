@@ -138,6 +138,8 @@ class Preferences:
     crypto: str = "no"                     # no | small | open
     region: str = "balanced"               # canada | balanced | us | global
     themes: tuple[str, ...] = ()           # e.g. ("Information Technology",)
+    simplicity: bool = False               # prefers few, easy-to-understand funds
+    values: tuple[str, ...] = ()           # non-financial values, e.g. ("no_fossil_fuels",)
 
 
 REGION_HOME_SHARE = {"canada": 0.60, "balanced": 0.40, "us": 0.20, "global": 0.30}
@@ -210,6 +212,22 @@ LEVELS = {
     4: Level(4, "Growth", 0.60, 0.80, 0.05, 0.10, 0.35),
     5: Level(5, "Aggressive", 0.75, 0.95, 0.10, 0.15, 0.40),
 }
+# Display, in the style of Canadian robo-advisors (Wealthsimple shows a named profile and a score out of 10).
+LEVEL_CARDS = {
+    1: {"fr": "Prudent", "score_10": 2, "for": "short horizons, little comfort with swings, or money needed soon"},
+    2: {"fr": "Modéré", "score_10": 4, "for": "near retirement or medium horizons with a focus on stability"},
+    3: {"fr": "Équilibré", "score_10": 6, "for": "medium to long horizons, balance between growth and stability"},
+    4: {"fr": "Croissance", "score_10": 8, "for": "long horizons and comfort with sizeable temporary losses"},
+    5: {"fr": "Audacieux", "score_10": 10, "for": "very long horizons, high capacity AND high tolerance"},
+}
+
+
+def level_card(level: int) -> dict:
+    lv = LEVELS[level]
+    return {"level": level, "name": lv.name, **LEVEL_CARDS[level], "stocks": f"{lv.equity_min:.0%}-{lv.equity_max:.0%}",
+            "max_crypto": lv.max_crypto, "max_single_security": lv.max_single_security}
+
+
 MAX_GOLD = 0.10
 CRYPTO_SMALL = 0.03
 FEE_ASSUMPTION = 0.0025  # broad index ETF portfolio; a stated hypothesis
@@ -297,6 +315,68 @@ def _dimension_score(answers: dict[str, str], dimension: str) -> tuple[float, li
     return score, reasons
 
 
+VALUES = {  # non-financial values -> what they exclude in this universe (sector level only)
+    "no_fossil_fuels": {"Energy"},
+}
+
+
+def values_exclusions(values) -> set[str]:
+    out: set[str] = set()
+    for v in values:
+        out |= VALUES.get(v, set())
+    return out
+
+
+def constraints_for(level: int, answers: dict[str, str], preferences: Preferences) -> tuple["Constraints", list["Flag"]]:
+    """Constraints of a risk level for one investor (preferences applied INSIDE the level's limits)."""
+    flags: list[Flag] = []
+    lv = LEVELS[level]
+    max_crypto = {"no": 0.0, "small": min(CRYPTO_SMALL, lv.max_crypto), "open": lv.max_crypto}[preferences.crypto]
+    if max_crypto > 0 and answers["experience"] == "none":
+        flags.append(Flag("CRYPTO_NO_EXPERIENCE", "info",
+                          "Crypto exposure is set to 0% because the profile reports no investment experience."))
+        max_crypto = 0.0
+    if preferences.crypto != "no" and lv.max_crypto == 0:
+        flags.append(Flag("CRYPTO_NOT_ALLOWED", "info",
+                          f"Crypto interest noted, but level {level} ({lv.name}) allows 0% crypto. "
+                          "A preference never overrides a constraint."))
+    if preferences.esg in {"prefer", "exclude"}:
+        flags.append(Flag("ESG_DATA_LIMIT", "info",
+                          "ESG preferences are applied through sector exclusions chosen by the investor and "
+                          "ESG-screened funds. The dataset has no ESG scores or controversy data; those need "
+                          "outside sources."))
+    return Constraints(
+        equity_min=lv.equity_min, equity_max=lv.equity_max, max_crypto=max_crypto, max_gold=MAX_GOLD,
+        excluded_sectors=tuple(sorted(set(preferences.excluded_sectors) | values_exclusions(preferences.values))),
+        home_equity_share=REGION_HOME_SHARE[preferences.region],
+        worst_year_accepted=WORST_YEAR_ACCEPTED[answers["range_choice"]],
+        limits=Limits(max_single_security=lv.max_single_security, max_sector=lv.max_sector, max_crypto=max_crypto),
+    ), flags
+
+
+def with_level(profile: "InvestorProfile", level: int, reason: str) -> "InvestorProfile":
+    """Same investor, a lower (never higher) risk level: used per goal and when the investor picks a safer level."""
+    if level > profile.level:
+        raise ValueError(f"level {level} is above the recommended level {profile.level}")
+    from dataclasses import replace
+    constraints, _ = constraints_for(level, profile.answers, profile.preferences)
+    return replace(profile, level=level, level_name=LEVELS[level].name, constraints=constraints,
+                   expected=expected_return(level, constraints.home_equity_share),
+                   flags=profile.flags + [Flag("LEVEL_LOWERED", "info", reason, {"from": profile.level, "to": level})])
+
+
+def choose_level(profile: "InvestorProfile", requested: int) -> tuple["InvestorProfile", str]:
+    """Investor override, as robo-advisors do it: a MORE conservative level is always allowed,
+    a more aggressive one is not (the recommendation already reflects capacity and tolerance)."""
+    if requested == profile.level:
+        return profile, "Recommended level kept."
+    if requested < profile.level:
+        return with_level(profile, requested, f"Investor chose level {requested} ({LEVELS[requested].name}), "
+                                              f"more conservative than the recommended {profile.level}."), "Allowed."
+    return profile, (f"Level {requested} ({LEVELS[requested].name}) is above the recommended level {profile.level}: "
+                     "it would exceed the investor's capacity or tolerance, so it is not applied.")
+
+
 def build_profile(answers: dict[str, str], preferences: Preferences = Preferences(),
                   goal: Goal | None = None) -> InvestorProfile:
     missing = [q.id for q in QUESTIONS if q.id not in answers]
@@ -332,30 +412,10 @@ def build_profile(answers: dict[str, str], preferences: Preferences = Preference
                           "No emergency fund: an unexpected expense could force a sale at a bad time. "
                           "Building 3 to 6 months of expenses in cash usually comes first."))
 
+    constraints, cflags = constraints_for(level, answers, preferences)
+    flags += cflags
     lv = LEVELS[level]
-    max_crypto = {"no": 0.0, "small": min(CRYPTO_SMALL, lv.max_crypto), "open": lv.max_crypto}[preferences.crypto]
-    if max_crypto > 0 and answers["experience"] == "none":
-        flags.append(Flag("CRYPTO_NO_EXPERIENCE", "info",
-                          "Crypto exposure is set to 0% because the profile reports no investment experience."))
-        max_crypto = 0.0
-    if preferences.crypto != "no" and lv.max_crypto == 0:
-        flags.append(Flag("CRYPTO_NOT_ALLOWED", "info",
-                          f"Crypto interest noted, but level {level} ({lv.name}) allows 0% crypto."))
-
-    excluded = tuple(preferences.excluded_sectors)
-    if preferences.esg in {"prefer", "exclude"}:
-        flags.append(Flag("ESG_DATA_LIMIT", "info",
-                          "ESG preferences are applied through sector exclusions chosen by the investor and "
-                          "ESG-screened funds. The dataset has no ESG scores or controversy data; those need "
-                          "outside sources."))
-
-    home = REGION_HOME_SHARE[preferences.region]
-    constraints = Constraints(
-        equity_min=lv.equity_min, equity_max=lv.equity_max, max_crypto=max_crypto, max_gold=MAX_GOLD,
-        excluded_sectors=excluded, home_equity_share=home,
-        worst_year_accepted=WORST_YEAR_ACCEPTED[answers["range_choice"]],
-        limits=Limits(max_single_security=lv.max_single_security, max_sector=lv.max_sector, max_crypto=max_crypto),
-    )
+    home = constraints.home_equity_share
 
     expected = expected_return(level, home)
     expectation = QUESTION_BY_ID["return_expectation"].option(answers["return_expectation"]).score

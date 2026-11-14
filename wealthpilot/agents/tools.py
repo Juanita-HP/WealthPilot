@@ -13,7 +13,7 @@ from typing import Callable
 
 import pandas as pd
 
-from .. import advocate, data, lab, portfolio, strategist, ticker, time_machine
+from .. import advocate, data, goals, lab, portfolio, risks, strategist, ticker, time_machine, whatif
 from .. import inflation as infl
 from .. import profile as pf
 from .ledger import Ledger, jsonable
@@ -90,13 +90,15 @@ def _need_profile(s: Session):
 
 
 def t_build_profile(s: Session, answers: list[dict], esg: str, excluded_sectors: list[str], crypto: str,
-                    region: str, themes: list[str], amount: float):
+                    region: str, themes: list[str], amount: float, simplicity: bool, values: list[str]):
     s.profile = pf.build_profile({a["question"]: a["answer"] for a in answers},
                                  pf.Preferences(esg=esg, excluded_sectors=tuple(excluded_sectors), crypto=crypto,
-                                                region=region, themes=tuple(themes)))
+                                                region=region, themes=tuple(themes), simplicity=simplicity,
+                                                values=tuple(values)))
     s.amount = amount
     p = s.profile
-    return {"level": p.level, "level_name": p.level_name, "capacity": p.capacity, "tolerance": p.tolerance,
+    return {"level": p.level, "level_name": p.level_name, "level_card": pf.level_card(p.level),
+            "capacity": p.capacity, "tolerance": p.tolerance,
             "experience": p.experience, "constraints": p.constraints.to_dict(), "expected_return_assumption": p.expected,
             "flags": [jsonable(f) for f in p.flags],
             "reasons": [jsonable(r) for r in p.reasons]}
@@ -182,7 +184,41 @@ def t_set_portfolio(s: Session, weights: list[dict]):
     return out
 
 
+def t_plan_goals(s: Session, goals_list: list[dict]):
+    _need_profile(s)
+    specs = [goals.GoalSpec(g["name"], g["type"], g["horizon_years"], g["target_amount"], g["current_amount"],
+                            g["monthly_contribution"]) for g in goals_list]
+    pl = goals.plan(s.profile, specs, s.prices_cad)
+    s.portfolio = pl.total_weights
+    s.amount = pl.total_amount or s.amount
+    return pl.to_dict()
+
+
+def t_risk_map(s: Session, weights: list[dict]):
+    w = _weights(weights) if weights else s.portfolio
+    if not w:
+        raise ValueError("No allocation to assess.")
+    vol = risks.average_dollar_volume(data.load_prices("close"), data.load_prices("volume"))
+    exp = s.profile.expected["net"] if s.profile else None
+    return {"risks": [r.to_dict() for r in risks.risk_map(w, s.universe, s.prices_cad, vol, expected_nominal=exp)],
+            "thresholds": risks.THRESHOLDS}
+
+
+def t_what_would_change(s: Session, goals_list: list[dict]):
+    _need_profile(s)
+    out = [c.to_dict() for c in whatif.profile_tipping_points(s.profile)]
+    for g in goals_list:
+        spec = goals.GoalSpec(g["name"], g["type"], g["horizon_years"], g["target_amount"], g["current_amount"],
+                              g["monthly_contribution"])
+        out += [c.to_dict() for c in whatif.goal_conditions(s.profile, spec)]
+    return {"conditions": out}
+
+
 QUESTION_IDS = [q.id for q in pf.QUESTIONS]
+GOALS = {"type": "array", "items": _obj({
+    "name": {"type": "string"}, "type": {"type": "string", "enum": list(goals.GOAL_TYPES)},
+    "horizon_years": {"type": "number"}, "target_amount": {"type": "number"},
+    "current_amount": {"type": "number"}, "monthly_contribution": {"type": "number"}}) | {"additionalProperties": False}}
 
 TOOLS = [
     Tool("build_profile",
@@ -195,8 +231,20 @@ TOOLS = [
                "crypto": {"type": "string", "enum": ["no", "small", "open"]},
                "region": {"type": "string", "enum": list(pf.REGION_HOME_SHARE)},
                "themes": {"type": "array", "items": {"type": "string"}},
-               "amount": {"type": "number", "description": "Fictional amount to invest, CAD."}}),
+               "amount": {"type": "number", "description": "Fictional amount to invest, CAD."},
+               "simplicity": {"type": "boolean", "description": "Prefers few, simple funds."},
+               "values": {"type": "array", "items": {"type": "string", "enum": list(pf.VALUES)}}}),
          t_build_profile, frozenset({"advisor"})),
+    Tool("plan_goals",
+         "Split the investor's money by goal (emergency fund, home purchase, project, retirement, income, legacy). "
+         "Each goal gets its own sub-portfolio, risk level (capped by the goal's horizon) and suggested account type.",
+         _obj({"goals_list": GOALS}), t_plan_goals, frozenset({"advisor"})),
+    Tool("risk_map", "Six kinds of risk (market, credit, liquidity, currency, concentration, inflation) for an "
+                     "allocation (empty list = current one), each with a level, the number behind it and a reason.",
+         _obj({"weights": WEIGHTS}), t_risk_map, frozenset({"advisor", "advocate"})),
+    Tool("what_would_change", "Conditions that would change the recommendation: profile answers one step away from "
+                              "another level, horizon thresholds, higher inflation, lower returns.",
+         _obj({"goals_list": GOALS}), t_what_would_change, frozenset({"advisor", "advocate"})),
     Tool("propose_allocation", "Build the policy allocation for the current profile, with a reason for every weight.",
          _obj({}), t_propose_allocation, frozenset({"advisor"})),
     Tool("set_portfolio", "Record the investor's existing (fictional) portfolio and check it against the profile.",

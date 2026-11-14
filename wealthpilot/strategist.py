@@ -158,6 +158,24 @@ def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = No
                           f"Bitcoin: half of the {c.max_crypto:.0%} crypto limit. Ether is left out because it adds "
                           "little diversification." + _q(ev, "corr_btc_eth", "Weekly correlation BTC/ETH {:.2f}")))
 
+    if p.simplicity:
+        # Fewer, simpler holdings: fold U.S. bonds into Canadian bonds, drop gold and the growth tilt.
+        merged: list[Line] = []
+        extra_bonds = sum(ln.weight for ln in lines if ln.block in {"us_bonds", "gold"})
+        extra_us = sum(ln.weight for ln in lines if ln.block == "us_growth")
+        for ln in lines:
+            if ln.block in {"us_bonds", "gold", "us_growth"}:
+                continue
+            if ln.block == "canadian_bonds":
+                ln = Line(ln.ticker, ln.weight + extra_bonds, ln.block,
+                          ln.reason + " Simplicity preference: also holds the U.S. bond and gold shares.")
+            if ln.block == "us_equity" and extra_us:
+                ln = Line(ln.ticker, ln.weight + extra_us, ln.block, ln.reason)
+            merged.append(ln)
+        lines = merged
+        notes.append("Simplicity preference: three or four funds instead of six or seven, with slightly less "
+                     "diversification across bond markets.")
+
     weights: dict[str, float] = {}
     for ln in lines:
         weights[ln.ticker] = weights.get(ln.ticker, 0.0) + ln.weight
