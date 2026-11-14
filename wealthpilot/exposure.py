@@ -123,6 +123,10 @@ def alerts(weights: dict[str, float], universe: pd.DataFrame, prices: pd.DataFra
     if len(w) > 1:
         rd = risk_decomposition(w.to_dict(), covariance(prices, w.index, start, end))
         for t, row in rd.iterrows():
+            # Diversified funds are expected to carry most of the risk in a fund portfolio;
+            # the alert targets single positions whose risk outweighs their size.
+            if u.loc[t, "asset_class"] not in SINGLE_SECURITY_CLASSES:
+                continue
             if row["risk_share"] > limits.max_risk_share and row["risk_share"] > row["weight"] * 1.5:
                 out.append(Alert("RISK_CONCENTRATION", "warning", t, float(row["risk_share"]), limits.max_risk_share,
                                  f"{t} is {row['weight']:.0%} of the money but {row['risk_share']:.0%} of the risk."))
