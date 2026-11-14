@@ -14,3 +14,9 @@ Changes motivated by the baseline's errors on the golden set (opinion and advice
 - explicit relevance rule and importance 1 for unrelated stories
 - why precision on "predictive" matters (it feeds the hype warning)
 - four worked examples taken from the 2026-11-14 collection; `evaluate` leaves headlines quoted in the prompt out of the score
+
+## rules-v2 (baseline update)
+Added opinion cues ("take", "verdict", "thinks", "bets", "calls for", "flags", "warns", "about to", "ways to") after
+"Jim Cramer has a strong take on Nvidia" was shown as a fact in the interface. Type accuracy 70% to 77%, predictive
+recall 48% to 66% on golden_v0. These cues were chosen after reading the errors on the same set, so the gain is
+optimistic; a second, unseen labeled set is needed to confirm it.

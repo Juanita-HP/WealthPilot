@@ -426,7 +426,8 @@ GROWTH_LABELS = [(70, "Strong measured growth"), (45, "Moderate measured growth"
 FINANCIAL_SECTORS = {"Financials", "Financial Services"}
 
 
-def growth_score(fund: dict[str, Fact], asset_class: str, sector: str | None = None) -> Score:
+def growth_score(fund: dict[str, Fact], asset_class: str, sector: str | None = None,
+                 include_opinions: bool = True) -> Score:
     """Growth profile of the BUSINESS from its statements; not a price forecast."""
     if asset_class not in {"equity", "EQUITY"}:
         return Score("growth_potential", None, "Not applicable", 0.0, [],
@@ -447,10 +448,11 @@ def growth_score(fund: dict[str, Fact], asset_class: str, sector: str | None = N
                "Not scored for banks and insurers: deposits and policy liabilities count as debt."
                if sector in FINANCIAL_SECTORS else
                "Leverage limits room to invest; 2.0x or more scores 0, no debt scores 1.", fund["debt_to_equity"].detail),
-        Factor("analyst_eps_growth", v["analyst_eps_growth"], lin(v["analyst_eps_growth"], 0.0, 0.25), 0.15,
-               "Analysts' expected EPS growth. OPINION of third parties, weighted lower than measured data.",
-               fund["analyst_eps_growth"].detail),
     ]
+    if include_opinions:
+        factors.append(Factor("analyst_eps_growth", v["analyst_eps_growth"], lin(v["analyst_eps_growth"], 0.0, 0.25), 0.15,
+                              "Analysts' expected EPS growth. OPINION of third parties, weighted lower than measured data.",
+                              fund["analyst_eps_growth"].detail))
     notes = ["Describes measured business growth. It does not predict the share price."]
     if v.get("trailing_pe") and v["trailing_pe"] > 40:
         notes.append(f"Trailing P/E of {v['trailing_pe']:.0f}: the market already prices in high growth, "
@@ -543,6 +545,28 @@ def fit_score(ticker: str, risk: dict[str, Fact], asset_class: str, sector: str 
 # --------------------------------------------------------------------------- overview
 
 
+FUND_BLOCK = {"XIU.TO": "canadian_equity", "SPY": "us_equity", "QQQ": "us_equity", "ESGV": "us_equity",
+              "XBB.TO": "fixed_income", "AGG": "fixed_income", "TLT": "fixed_income", "ZST.TO": "short_term"}
+
+
+def long_run_assumption(ticker: str) -> dict | None:
+    """Planning assumption (FP Canada / IFP 2026) for broad funds; None where no assumption exists."""
+    from . import assumptions
+    block = FUND_BLOCK.get(ticker)
+    if block is None:
+        return None
+    return {"block": block, "annual_return": assumptions.RETURNS[block], "source": assumptions.SOURCE["name"]}
+
+
+def auto_source():
+    """Live Yahoo data when yfinance is installed, else the offline starter dataset."""
+    try:
+        import yfinance  # noqa: F401
+        return YFinanceSource()
+    except ImportError:
+        return StarterSource()
+
+
 def default_benchmark(currency: str | None) -> str:
     return "XIU.TO" if currency == "CAD" else "SPY"
 
@@ -617,6 +641,9 @@ def overview(ticker: str, source: DataSource, profile=None, portfolio: dict[str,
         "fundamentals": {k: v.to_dict() for k, v in fund.items()},
         "vs_benchmark": rel,
         "growth_score": growth_score(fund, asset_class, info.get("sector")).to_dict(),
+        # Unbiased potential: measured business data only (no analyst opinion, no news, no investor profile).
+        "potential_score": growth_score(fund, asset_class, info.get("sector"), include_opinions=False).to_dict(),
+        "long_run_assumption": long_run_assumption(ticker),
         "fit_score": None,
         "data": {"source": source.name,
                  "retrieved_at": getattr(source, "retrieved_at", {}).get(f"{ticker}_info"),
