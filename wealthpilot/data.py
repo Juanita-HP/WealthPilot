@@ -28,7 +28,8 @@ import pandas as pd
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "starter"
 BASE_CURRENCY = "CAD"
 FFILL_LIMIT = 5
-MONTHLY_SERIES = {"STATIC_TOTALCPICHANGE", "CPIAUCSL", "UNRATE"}
+MONTHLY_SERIES = {"STATIC_TOTALCPICHANGE", "CPIAUCSL", "UNRATE", "V41690973", "CPIW"}
+EXTERNAL_DIR = DATA_DIR.parent / "external"
 
 
 def _path(name: str, data_dir: Path | None) -> Path:
@@ -99,6 +100,24 @@ def load_macro(series_id: str, data_dir: Path | None = None, point_in_time: bool
     return s
 
 
+def load_macro_history(series_id: str, point_in_time: bool = True, data_dir: Path | None = None) -> pd.Series:
+    """One series from data/external/macro_history.csv (1995 onward; see scripts/fetch_macro_history.py).
+
+    Same publication-lag convention as load_macro.
+    """
+    path = (data_dir or EXTERNAL_DIR) / "macro_history.csv"
+    if not path.exists():
+        raise FileNotFoundError(f"{path} not found. Run scripts/fetch_macro_history.py.")
+    m = pd.read_csv(path, parse_dates=["date"])
+    s = m.loc[m["series_id"] == series_id].set_index("date")["value"].sort_index()
+    if s.empty:
+        raise KeyError(f"unknown series_id {series_id!r}")
+    if point_in_time:
+        s.index = s.index + (pd.offsets.MonthBegin(2) if series_id in MONTHLY_SERIES else pd.offsets.BDay(1))
+    s.name = series_id
+    return s
+
+
 def risk_free_per_period(index: pd.DatetimeIndex, series_id: str = "V39079",
                          periods_per_year: int = 252, data_dir: Path | None = None) -> pd.Series:
     """Per-period risk-free return from an annual % rate (default: Bank of Canada overnight target)."""
@@ -109,6 +128,6 @@ def risk_free_per_period(index: pd.DatetimeIndex, series_id: str = "V39079",
 
 __all__ = [
     "DATA_DIR", "BASE_CURRENCY", "load_universe", "load_prices", "align", "load_fx",
-    "to_base_currency", "load_prices_cad", "load_macro", "risk_free_per_period",
+    "to_base_currency", "load_prices_cad", "load_macro", "load_macro_history", "risk_free_per_period",
     "business_days",
 ]
