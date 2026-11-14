@@ -107,20 +107,8 @@ def risk_free_per_period(index: pd.DatetimeIndex, series_id: str = "V39079",
     return (1 + rate / 100.0) ** (1.0 / periods_per_year) - 1
 
 
-def currency_exposure(weights: dict[str, float], universe: pd.DataFrame) -> pd.Series:
-    """Share of the portfolio by listing currency."""
-    w = pd.Series(weights, dtype=float)
-    return w.groupby(universe.loc[w.index, "currency"]).sum().sort_values(ascending=False)
-
-
-def exposure(weights: dict[str, float], universe: pd.DataFrame, by: str) -> pd.Series:
-    """Share of the portfolio by any universe column (sector, asset_class, market, currency)."""
-    w = pd.Series(weights, dtype=float)
-    return w.groupby(universe.loc[w.index, by]).sum().sort_values(ascending=False)
-
-
 __all__ = [
     "DATA_DIR", "BASE_CURRENCY", "load_universe", "load_prices", "align", "load_fx",
     "to_base_currency", "load_prices_cad", "load_macro", "risk_free_per_period",
-    "currency_exposure", "exposure", "business_days",
+    "business_days",
 ]

@@ -17,7 +17,7 @@ from pathlib import Path
 import pandas as pd
 import yfinance as yf
 
-OUT_DIR = Path(__file__).parent
+OUT_DIR = Path(__file__).resolve().parent.parent / "data" / "starter"
 START = "2021-11-12"
 END = "2026-11-12"  # last complete trading day, inclusive
 RETRIEVED = date.today().isoformat()
