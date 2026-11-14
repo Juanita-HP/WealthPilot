@@ -1,0 +1,6 @@
+# Starter data: copy the organizers' files locally (Yahoo-derived files have redistribution limits)
+data/starter/*.csv
+!data/starter/sources_metadata.csv
+__pycache__/
+*.pyc
+.venv/
