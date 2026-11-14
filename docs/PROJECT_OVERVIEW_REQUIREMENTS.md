@@ -1,43 +1,46 @@
-# WealthPilot — Project Overview & Requirements
+# Project Overview & Requirements
 
-**AlphaForge AI · Datathon 2026 | Educational investment simulation**
+### 1. Purpose and probleme statement
 
-### 1. Overview & Problem
-Investors struggle to connect scattered financial data with personal goals, risk capacity and preferences. **WealthPilot** is a Streamlit prototype that builds investor profiles, compares fictional portfolios using public data, and explains results with verifiable evidence.
+Investors often struggle to interpret complex financial data and assess whether investment opportunities align with their goals, risk capacity, risk tolerance, and investment horizons. Existing tools may offer generic recommendations without clearly explaining the risks and assumptions involved. WealthPilot addresses this problem through an AI-powered investment decision-support platform that combines public financial data, rule-based investor classification, risk analysis, and explainable AI Agents to provide transparent, goal-based insights through educational simulations.
 
-### 2. User Journey & Inputs/Outputs
-**Fictional account → six-step onboarding → risk classification → goal-based plan → charts and scenarios → AI explanations.**
+### 2. Functional Requirements
 
-Inputs: financial situation (CAD), goals, horizons, behavioural responses, experience and preferences.
-
-Outputs: five-level risk profile, constraints, simulated allocations, warnings and sourced explanations.
-
-### 3. Functional Requirements
-
-| ID | Requirement |
+| ID | Required capability |
 |---|---|
-| **FR-01** | Validate onboarding inputs and support a 10-question risk-scoring engine. |
-| **FR-02** | Classify by **Risk Capacity** and **Risk Tolerance** (use the lower score); cap risk separately for each goal's horizon. |
-| **FR-03** | Analyze historical returns, volatility, Sharpe/Sortino, drawdowns and diversification. |
-| **FR-04** | Display goal-based allocations, backtests, scenarios and interactive charts. |
-| **FR-05** | **Advisor → Devil's Advocate → code-based Verifier:** challenge mismatches, cite calculation receipts and flag unsupported claims. |
+| **FR-01** | Validate financial inputs (CAD), goals, horizons, preferences and behavioural responses; support the existing 10-question scoring engine. |
+| **FR-02** | Generate an explainable investor Profile, goal-specific risk limits, warnings and allocation constraints. |
+| **FR-03** | Analyze public market data; compare simulated allocations, historical performance, risk and diversification. |
+| **FR-04** | Display dashboards, charts, backtests and hypothetical scenarios; expose data sources and assumptions. |
+| **FR-05** | Run **Advisor → Devil's Advocate → deterministic Verifier**; challenge mismatches and check numeric claims against cited calculation receipts. |
 
-### 4. Data & Technical Architecture
-**Frontend:** Streamlit. **Backend:** Python, pandas, NumPy and financial engines.
+### 3. Investor Classification & Risk Assessment
 
-**Data:** official starter dataset (31 assets, prices, FX and macro series) plus documented public sources; CAD conversion and publication lags prevent misleading comparisons.
+**Rule-based classification (not ML):** the risk score uses the **lower of Risk Capacity** (financial ability to withstand loss) **and Risk Tolerance** (willingness to bear loss). Each goal's investment horizon can further restrict its risk level.
 
-**AWS:** Bedrock, Lambda, S3 and DynamoDB are implemented in code with mock tests; **live deployment is not yet confirmed**.
+Five levels are defined in `profile.py`: **1 Conservative · 2 Moderately Conservative · 3 Balanced · 4 Growth · 5 Aggressive**.
 
-### 5. Quality, Risks & Boundaries
-Requirements: clear UX, traceable calculations, reproducible results, input validation and protected credentials. Flag concentration, horizon conflicts and uncertainty.
+**Equity ranges (L1–L5):** 15–35%, 25–50%, 40–65%, 60–80%, 75–95%; **crypto caps:** 0%, 0%, 2%, 5%, 10%. Constraints also restrict single-security exposure and respect eligible preferences.
 
-**Simulation only:** no trades, brokerage connections, real financial advice or guaranteed returns.
+**Financial metrics:** cumulative return, **CAGR, annualized volatility, Sharpe Ratio, Sortino Ratio, Maximum Drawdown**, inflation-adjusted return and portfolio diversification/concentration.
 
-### 6. Acceptance Criteria & Delivery
-- Demonstrate distinct, explainable outcomes for **Amira, Mateo and Robert**.
-- Check rule-based classification with persona/synthetic tests; validate financial metrics, agent receipts and out-of-sample performance.
-- Verify a working browser-accessible demo **and a live AWS-backed agent call** before claiming deployment.
-- Deliver code + README, concise technical documentation, one-pager and ~5-minute demo video. Manage tasks using **Scrumban / GitHub Projects**.
+The risk map covers **market, credit, liquidity, currency, concentration and inflation** risks, with supporting values and explanations.
 
-**Technical references:** [Architecture](https://github.com/Juanita-HP/WealthPilot/blob/main/docs/architecture.md) · [AWS](https://github.com/Juanita-HP/WealthPilot/blob/main/docs/aws.md) · [Repository](https://github.com/Juanita-HP/WealthPilot)
+### 4. Non-Functional Requirements
+- **Accuracy & reproducibility:** deterministic calculations; documented currency conversion, publication lags and assumptions; time-aware backtesting.
+- **Explainability & reliability:** traceable data sources, agent receipts, verification flags and explicit missing-data/uncertainty notices.
+- **Security & usability:** validate inputs, protect credentials and fictional account data; provide understandable, accessible charts and error messages.
+- **Performance:** the demonstration should be responsive; **no measured response-time SLA is claimed**.
+
+### 5. Architecture, Project Risks & Boundaries
+**Stack:** Streamlit; Python/pandas/NumPy/Plotly; public starter data (31 assets), FX and macro sources; Claude agent clients and AWS Bedrock/Lambda/S3/DynamoDB integration code. **Live AWS deployment is not yet verified.**
+
+**Risks/limits:** five-year market history, survivorship bias, revised data, incomplete ESG coverage, model uncertainty, AWS access/deployment.
+
+**Educational simulation only:** no real trades, brokerage connection, guaranteed returns or regulated financial advice.
+
+### 6. Success Criteria
+- Demonstrate **Amira, Mateo and Robert** with coherent, different, explainable outcomes and enforced constraints.
+- Validate classification against persona tests and **600 synthetic profiles**; check risk calculations and portfolio rules through automated tests.
+- Evaluate estimated methods using **out-of-sample / walk-forward** comparisons; report **MAE** for inflation and **accuracy/precision/recall** for news classification where applicable.
+- Demonstrate a functioning browser workflow and **one real AWS-backed agent call** before claiming deployment; deliver README, technical documentation, one-pager and ~5-minute demo video
