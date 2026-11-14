@@ -225,7 +225,10 @@ def trailing_returns(prices: pd.Series) -> dict[str, Fact]:
         if prices.index[0] > start + pd.Timedelta(days=5):
             out[label] = Fact(None, "computed", f"history starts {prices.index[0].date()}, too short for {label}")
             continue
+        # last price on or before the window start; if history starts a few days later, its first price
         v0 = _value_asof(prices, start)
+        if v0 is None:
+            v0 = float(prices.iloc[0])
         r = prices.iloc[-1] / v0 - 1
         if label in {"3Y", "5Y"}:
             r = (1 + r) ** (1 / int(label[0])) - 1
@@ -420,7 +423,10 @@ def _combine(name: str, factors: list[Factor], labels: list[tuple[float, str]], 
 GROWTH_LABELS = [(70, "Strong measured growth"), (45, "Moderate measured growth"), (0, "Weak measured growth")]
 
 
-def growth_score(fund: dict[str, Fact], asset_class: str) -> Score:
+FINANCIAL_SECTORS = {"Financials", "Financial Services"}
+
+
+def growth_score(fund: dict[str, Fact], asset_class: str, sector: str | None = None) -> Score:
     """Growth profile of the BUSINESS from its statements; not a price forecast."""
     if asset_class not in {"equity", "EQUITY"}:
         return Score("growth_potential", None, "Not applicable", 0.0, [],
@@ -436,7 +442,10 @@ def growth_score(fund: dict[str, Fact], asset_class: str) -> Score:
         Factor("fcf_margin", v["fcf_margin"], lin(v["fcf_margin"], 0.0, 0.25), 0.15,
                "Free cash flow margin, the cash available to fund growth; 0% scores 0, 25%+ scores 1.",
                fund["fcf_margin"].detail),
-        Factor("debt_to_equity", v["debt_to_equity"], lin(v["debt_to_equity"], 2.0, 0.0), 0.15,
+        Factor("debt_to_equity", v["debt_to_equity"],
+               None if sector in FINANCIAL_SECTORS else lin(v["debt_to_equity"], 2.0, 0.0), 0.15,
+               "Not scored for banks and insurers: deposits and policy liabilities count as debt."
+               if sector in FINANCIAL_SECTORS else
                "Leverage limits room to invest; 2.0x or more scores 0, no debt scores 1.", fund["debt_to_equity"].detail),
         Factor("analyst_eps_growth", v["analyst_eps_growth"], lin(v["analyst_eps_growth"], 0.0, 0.25), 0.15,
                "Analysts' expected EPS growth. OPINION of third parties, weighted lower than measured data.",
@@ -607,7 +616,7 @@ def overview(ticker: str, source: DataSource, profile=None, portfolio: dict[str,
         "risk": {k: v.to_dict() for k, v in risk.items()},
         "fundamentals": {k: v.to_dict() for k, v in fund.items()},
         "vs_benchmark": rel,
-        "growth_score": growth_score(fund, asset_class).to_dict(),
+        "growth_score": growth_score(fund, asset_class, info.get("sector")).to_dict(),
         "fit_score": None,
         "data": {"source": source.name,
                  "retrieved_at": getattr(source, "retrieved_at", {}).get(f"{ticker}_info"),

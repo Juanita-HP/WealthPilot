@@ -214,3 +214,20 @@ def test_offline_starter_source_scores_for_robert():
     assert tsla["risk"]["max_drawdown"]["value"] == pytest.approx(0.73, abs=0.01)
     btc = tk.overview("BTC-USD", s, profile=robert)
     assert btc["fit_score"]["label"] == "Not suitable"
+
+
+def test_trailing_returns_when_history_starts_just_after_window():
+    # Found on live data: 5 years of history starts a day or two after "today minus 5 years".
+    idx = pd.bdate_range("2021-11-16", "2026-11-13")
+    s = pd.Series(np.linspace(100, 200, len(idx)), index=idx)
+    r = tk.trailing_returns(s)
+    assert r["5Y"].value == pytest.approx((200 / 100) ** (1 / 5) - 1)
+
+
+def test_leverage_not_scored_for_banks(src):
+    f = tk.fundamentals({}, src.statements("STEADY"), pd.Series(dtype=float))  # debt/equity 2.2
+    bank = tk.growth_score(f, "EQUITY", "Financial Services")
+    other = tk.growth_score(f, "EQUITY", "Utilities")
+    lev = lambda s: next(x for x in s.factors if x.name == "debt_to_equity")
+    assert lev(bank).score is None and "banks" in lev(bank).explanation
+    assert lev(other).score == 0.0
