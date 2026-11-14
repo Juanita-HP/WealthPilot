@@ -6,6 +6,7 @@ Simulation only: no real transactions, not financial advice.
 
 from __future__ import annotations
 
+import inspect
 import os
 import sys
 from pathlib import Path
@@ -20,6 +21,18 @@ from wealthpilot import advocate, data, goals as gl, lab, metrics, profile as pf
 from wealthpilot import news, ticker as tk, time_machine as tm, whatif  # noqa: E402
 
 st.set_page_config(page_title="WealthPilot", page_icon="🧭", layout="wide")
+
+
+def stretch(fn) -> dict:
+    """Full-width argument that works on old and new Streamlit versions.
+
+    Recent versions take width="stretch" and deprecate use_container_width; older ones (e.g. 1.40)
+    take width as an integer and use_container_width=True.
+    """
+    ps = inspect.signature(fn).parameters
+    if "width" in ps and "int" not in str(ps["width"].annotation):
+        return {"width": "stretch"}
+    return {"use_container_width": True}
 
 QUESTION_FR = {
     "horizon": "Quand aurez-vous besoin de la majeure partie de cet argent ?",
@@ -147,7 +160,7 @@ with tabs[1]:
         {"name": "Retraite", "type": "retirement", "horizon_years": 25.0, "target_amount": 800000.0,
          "current_amount": 90000.0, "monthly_contribution": 600.0},
     ])
-    edited = st.data_editor(default_goals, num_rows="dynamic", width="stretch", column_config={
+    edited = st.data_editor(default_goals, num_rows="dynamic", **stretch(st.data_editor), column_config={
         "type": st.column_config.SelectboxColumn("type", options=list(gl.GOAL_TYPES))})
     specs = [gl.GoalSpec(r["name"], r["type"], float(r["horizon_years"]), float(r["target_amount"]),
                          float(r["current_amount"]), float(r["monthly_contribution"]))
@@ -164,7 +177,7 @@ with tabs[1]:
                 st.caption(g.account_why)
                 fig = go.Figure(go.Pie(labels=list(g.weights), values=list(g.weights.values()), hole=0.55))
                 fig.update_layout(height=220, margin=dict(t=0, b=0, l=0, r=0), showlegend=False)
-                st.plotly_chart(fig, width="stretch", key=f"pie_{g.goal.name}")
+                st.plotly_chart(fig, **stretch(st.plotly_chart), key=f"pie_{g.goal.name}")
                 ga = g.goal_analysis
                 ok = ga["reachable"]
                 st.write(("✅ Atteignable" if ok else "⚠️ Pas atteignable tel quel") +
@@ -197,7 +210,7 @@ with tabs[2]:
     d = r.worst_drawdown
     fig.add_vrect(x0=d["peak_date"], x1=d["trough_date"], fillcolor="red", opacity=0.08, line_width=0)
     fig.update_layout(height=380, margin=dict(t=10, b=10), legend=dict(orientation="h"))
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, **stretch(st.plotly_chart))
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Valeur finale", f"{r.final_value:,.0f} $")
     c2.metric("Après inflation", f"{r.final_value_real:,.0f} $" if r.final_value_real else "—")
@@ -213,7 +226,7 @@ with tabs[2]:
     st.dataframe(pd.DataFrame([{"Scénario": s["label"], "Effet": f"{s['portfolio_return']:.1%}",
                                 "En $": f"{s['dollars']:,.0f}", "Base": s["basis"]}
                                for s in (tm.shock(weights, universe, float(amount), k) for k in tm.SHOCKS)]),
-                 hide_index=True, width="stretch")
+                 hide_index=True, **stretch(st.dataframe))
 
 # ----------------------------------------------------------------------------- 4. ticker dashboard
 with tabs[3]:
@@ -231,7 +244,7 @@ with tabs[3]:
         st.subheader(f"{idn['name'] or symbol} ({symbol}) · {idn.get('sector') or ''} · {idn.get('currency') or ''}")
         cf = go.Figure(go.Scatter(x=[p["t"] for p in ch["points"]], y=[p["close"] for p in ch["points"]], fill="tozeroy"))
         cf.update_layout(height=300, margin=dict(t=10, b=10), yaxis=dict(rangemode="normal"))
-        st.plotly_chart(cf, width="stretch")
+        st.plotly_chart(cf, **stretch(st.plotly_chart))
         m = st.columns(6)
         for col, k in zip(m, ["1M", "YTD", "1Y", "3Y", "5Y"]):
             col.metric(k, pct(o["returns"][k]["value"]), help=o["returns"][k]["detail"])
@@ -291,7 +304,7 @@ with tabs[4]:
         "Stratégie (avant)": res.in_sample, "Acheter-conserver (avant)": res.buy_hold_in_sample,
         "Stratégie (après, hors échantillon)": res.out_of_sample, "Acheter-conserver (après)": res.buy_hold_out_of_sample,
     }).loc[["total_return", "cagr", "volatility", "sharpe", "max_drawdown", "trades", "time_invested", "costs_paid"]]
-    st.dataframe(t.style.format("{:.3f}"), width="stretch")
+    st.dataframe(t.style.format("{:.3f}"), **stretch(st.dataframe))
     for fnd in res.findings:
         (st.warning if fnd["severity"] == "warning" else st.info)(fnd["message"])
     st.caption("Le labo répond à « qu'est-ce qui se serait passé ? », jamais à « achetez maintenant ».")
@@ -313,7 +326,7 @@ with tabs[5]:
     if rv.before_after:
         b, a = rv.before_after["before"], rv.before_after["after"]
         cmp = pd.DataFrame({"Avant": b, "Après": a}).loc[["cagr", "volatility", "max_drawdown", "sharpe"]]
-        st.dataframe(cmp.style.format("{:.3f}"), width="stretch")
+        st.dataframe(cmp.style.format("{:.3f}"), **stretch(st.dataframe))
         st.caption(f"Historique {rv.before_after['window']}, en CAD.")
     for c in rv.challenges:
         with st.container(border=True):
