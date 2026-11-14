@@ -101,6 +101,14 @@ class Plan:
         return asdict(self)
 
 
+def _cushion_analysis(g: GoalSpec) -> dict:
+    """An emergency fund has no return to reach: it has to be filled."""
+    gap = max(0.0, g.target_amount - g.current_amount)
+    months = None if gap == 0 else (gap / g.monthly_contribution if g.monthly_contribution > 0 else None)
+    return {"kind": "cushion", "reachable": gap == 0, "gap": gap, "months_to_fill": months,
+            "required_return": None, "assumed_return": None}
+
+
 def _goal_analysis(g: GoalSpec, expected_net: float) -> dict:
     goal = pf.Goal(g.current_amount, g.target_amount, max(g.horizon_years, 0.25), g.monthly_contribution)
     need = pf.required_return(goal)
@@ -131,7 +139,7 @@ def plan_goal(profile: pf.InvestorProfile, g: GoalSpec, prices: pd.DataFrame | N
             [{"ticker": BLOCKS["cash"], "weight": 1.0,
               "reason": "Ultra short-term bonds as a cash proxy in this dataset; a high-interest savings account or "
                         "GIC plays the same role in practice."}],
-            *ACCOUNT_SUGGESTION[g.type], _goal_analysis(g, pf.assumptions.RETURNS["short_term"] - pf.FEE_ASSUMPTION),
+            *ACCOUNT_SUGGESTION[g.type], _cushion_analysis(g),
             ["Its return may not beat inflation: that is the price of being available tomorrow."])
     cap = horizon_cap(g.horizon_years)
     level = min(profile.level, cap)
@@ -164,3 +172,24 @@ def plan(profile: pf.InvestorProfile, goals: list[GoalSpec], prices: pd.DataFram
                      "force a sale in a downturn.")
     return Plan(plans, combined, sum(p.goal.current_amount for p in plans),
                 [plans[i].goal.name for i in order], notes)
+
+
+def check_plan(profile: pf.InvestorProfile, p: Plan, universe: pd.DataFrame, prices: pd.DataFrame | None = None) -> dict:
+    """Constraint checks per goal, each against that goal's own level (the combined portfolio mixes levels)."""
+    out = {}
+    for g in p.goals:
+        if g.weights == {BLOCKS["cash"]: 1.0}:
+            out[g.goal.name] = []
+            continue
+        goal_profile = profile if g.level == profile.level else pf.with_level(profile, g.level, g.why_level)
+        out[g.goal.name] = pf.check_allocation(g.weights, goal_profile, universe, prices)
+    return out
+
+
+def effective_profile(profile: pf.InvestorProfile, p: Plan) -> pf.InvestorProfile:
+    """The most restrictive level among invested goals: what a new request must respect."""
+    levels = [g.level for g in p.goals if g.weights != {BLOCKS["cash"]: 1.0}]
+    if not levels or min(levels) >= profile.level:
+        return profile
+    lvl = min(levels)
+    return pf.with_level(profile, lvl, f"Most restrictive invested goal is at level {lvl} ({pf.LEVELS[lvl].name}).")
