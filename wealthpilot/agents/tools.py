@@ -13,7 +13,7 @@ from typing import Callable
 
 import pandas as pd
 
-from .. import advocate, data, goals, lab, portfolio, risks, strategist, ticker, time_machine, whatif
+from .. import advocate, data, goals, lab, news, portfolio, risks, strategist, ticker, time_machine, whatif
 from .. import inflation as infl
 from .. import profile as pf
 from .ledger import Ledger, jsonable
@@ -149,11 +149,25 @@ def t_ticker(s: Session, symbol: str):
     return o
 
 
+def _digest(symbol: str) -> dict | None:
+    try:
+        return news.digest(symbol, news.recent_headlines(symbol)).to_dict()
+    except Exception:  # news are optional evidence; their absence is reported by the digest tool itself
+        return None
+
+
 def t_review_trade(s: Session, symbol: str, weight: float):
     _need_profile(s)
     if not s.portfolio:
         raise ValueError("No current portfolio. Call propose_allocation first or provide one.")
-    return advocate.review_trade(symbol.upper(), weight, s.portfolio, s.profile, s.prices_cad, s.universe).to_dict()
+    return advocate.review_trade(symbol.upper(), weight, s.portfolio, s.profile, s.prices_cad, s.universe,
+                                 news_digest=_digest(symbol.upper())).to_dict()
+
+
+def t_news(s: Session, symbol: str):
+    d = news.digest(symbol.upper(), news.recent_headlines(symbol.upper()))
+    return {**d.to_dict(), "trust_tiers": news.TRUST_TIERS,
+            "use": "Context and justification only; news are not used to predict prices."}
 
 
 def t_review_allocation(s: Session, weights: list[dict]):
@@ -268,6 +282,10 @@ TOOLS = [
          t_review_trade, frozenset({"advocate", "advisor"})),
     Tool("review_allocation", "Devil's advocate review of an allocation (empty list = current one).",
          _obj({"weights": WEIGHTS}), t_review_allocation, frozenset({"advocate", "advisor"})),
+    Tool("news_digest",
+         "Recent headlines about one ticker: share of forecasts/opinions vs facts, source trust, hype share, "
+         "trust-weighted sentiment, top facts and top opinions. For context and justification, never to predict.",
+         _obj({"symbol": {"type": "string"}}), t_news, frozenset({"advisor", "advocate"})),
     Tool("strategy_lab",
          "Test a trading rule on one ticker: optimized on 70% of history, tested on the rest, against buy-and-hold.",
          _obj({"symbol": {"type": "string"}, "strategy": {"type": "string", "enum": list(lab.STRATEGIES)}}),

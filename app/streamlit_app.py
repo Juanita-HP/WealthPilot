@@ -17,7 +17,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from wealthpilot import advocate, data, goals as gl, lab, metrics, profile as pf, risks, strategist  # noqa: E402
-from wealthpilot import ticker as tk, time_machine as tm, whatif  # noqa: E402
+from wealthpilot import news, ticker as tk, time_machine as tm, whatif  # noqa: E402
 
 st.set_page_config(page_title="WealthPilot", page_icon="🧭", layout="wide")
 
@@ -253,6 +253,28 @@ with tabs[3]:
                 st.caption(n)
         with st.expander("Données et provenance"):
             st.json({"fondamentaux": o["fundamentals"], "risque": o["risk"], "données": o["data"]})
+        st.markdown("#### Nouvelles récentes : faits ou opinions ?")
+        try:
+            dg = news.digest(symbol, news.recent_headlines(symbol))
+            n1, n2, n3, n4 = st.columns(4)
+            n1.metric("Manchettes pertinentes", dg.n)
+            n2.metric("Opinions / prévisions", f"{dg.share_predictive:.0%}")
+            n3.metric("Sources peu fiables", f"{dg.share_low_trust:.0%}")
+            n4.metric("« Hype » (opinions de sources peu fiables)", f"{dg.hype_share:.0%}")
+            fa, op = st.columns(2)
+            with fa:
+                st.markdown("**Faits (sources les plus fiables d'abord)**")
+                for x in dg.top_descriptive:
+                    st.write(f"• {x['title']} — _{x['publisher']}, confiance {x['trust']:.2f}_")
+            with op:
+                st.markdown("**Opinions et prévisions**")
+                for x in dg.top_predictive:
+                    st.write(f"• {x['title']} — _{x['publisher']}, confiance {x['trust']:.2f}_")
+            for n_ in dg.notes:
+                st.caption(n_)
+            st.caption(f"Classificateur : {dg.classifier}. Les nouvelles servent à expliquer, jamais à prédire.")
+        except Exception as e:
+            st.caption(f"Nouvelles indisponibles : {e}")
     except Exception as e:  # show the problem instead of a stack trace
         st.error(f"{symbol} : {e}")
 
@@ -281,7 +303,11 @@ with tabs[5]:
     asym = c1.selectbox("Je veux mettre…", sorted(universe.index), index=sorted(universe.index).index("TSLA"), key="adv_sym")
     aw = c2.slider("…cette part de mon portefeuille", 0.01, 0.6, 0.30, 0.01, format="%.2f")
     current = st.session_state.get("plan").total_weights if st.session_state.get("plan") else strategist.policy_allocation(profile, px_cad).weights
-    rv = advocate.review_trade(asym, aw, current, profile, px_cad, universe)
+    try:
+        adv_digest = news.digest(asym, news.recent_headlines(asym)).to_dict()
+    except Exception:
+        adv_digest = None
+    rv = advocate.review_trade(asym, aw, current, profile, px_cad, universe, news_digest=adv_digest)
     st.subheader({"reconsider": "🔴 À reconsidérer", "proceed with care": "🟡 Avec prudence",
                   "no major objection": "🟢 Pas d'objection majeure"}[rv.verdict])
     if rv.before_after:

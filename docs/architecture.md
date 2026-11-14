@@ -83,8 +83,22 @@ Explainability and governance, the two "possibilities" of the brief, are built i
 | Bank of Canada Valet API and FRED via `scripts/fetch_macro_history.py` | CPI index and y/y, core CPI, yields, oil, FX, U.S. CPI and unemployment since 1995 | Inflation model, real-terms values |
 | FP Canada / Institute of Financial Planning, Projection Assumption Guidelines 2026 | Long-term planning returns and inflation | Goal feasibility (labeled as assumptions) |
 | Yahoo Finance via yfinance (live, cached with retrieval time) | Fundamentals, analyst estimates | Ticker dashboard; analyst figures labeled as third-party opinion |
+| Yahoo Finance search endpoint via yfinance (headlines, publisher, time, related tickers; no article bodies) | Recent news, 308 headlines collected 2026-11-14 | News digest and hype challenge; 64 headlines hand-labeled as a golden set (`data/news/golden_v0.jsonl`, labeling guide in `wealthpilot/news_prompts/`) |
 
 Point-in-time rules: monthly macro data is usable from the first day of the second month after its reference month; daily data from the next business day; trading decisions execute at the next close.
+
+## News pipeline
+
+| Step | How | Why |
+|---|---|---|
+| Collect | Yahoo Finance search endpoint (allowed API, no scraping, no CAPTCHA bypass) | Public, documented, respects access terms |
+| Trust | Five documented tiers (official 1.0, wire 0.85, media 0.65, aggregator 0.45, promotional 0.3) | Weight facts by where they come from |
+| Relevance | Company names and tickers in the headline | Search returns loosely related stories |
+| Classify | Rule baseline (offline) and Claude with versioned prompts (`v1`, `v2`); same labeling guide for humans and prompts | Separate facts from forecasts and opinions |
+| Evaluate | `scripts/eval_news.py` on the golden set; prompt examples excluded from scoring; results in `models/news_eval.json` | Each prompt version must beat the previous one |
+| Use | Digest per ticker (facts first, opinions apart, hype share); devil's advocate HYPE challenge with facts as counterpoint; agent tool `news_digest` | News explain and challenge; they never predict prices |
+
+Baseline result: rules-v1 gets 70% type accuracy but finds only 48% of predictive headlines (see `docs/news_eval.md`). The prompt versions are scored with the same script once Bedrock access is available.
 
 ## Known data issues
 

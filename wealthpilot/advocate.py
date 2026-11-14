@@ -140,8 +140,13 @@ def review_allocation(proposed: dict[str, float], profile: InvestorProfile, pric
     return Review(subject, challenges, before_after)
 
 
+HYPE_SHARE = 0.5   # share of headlines that are forecasts/opinions from low-trust sources
+HYPE_MIN_HEADLINES = 5
+
+
 def review_trade(ticker: str, weight: float, current: dict[str, float], profile: InvestorProfile,
-                 prices: pd.DataFrame, universe: pd.DataFrame, risk: dict | None = None) -> Review:
+                 prices: pd.DataFrame, universe: pd.DataFrame, risk: dict | None = None,
+                 news_digest: dict | None = None) -> Review:
     """Challenge a request to put ``weight`` of the portfolio in ``ticker``."""
     if ticker not in universe.index:
         raise KeyError(f"{ticker} is not in the asset universe")
@@ -174,6 +179,16 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
             {"peak": str(ep["peak_date"].date()), "trough": str(ep["trough_date"].date()),
              "recovery": str(recovered.date()) if recovered is not None else None, "drawdown": ep["drawdown"]},
             None, "If it happened again just before you need the money, what would you do?"))
+    if news_digest and news_digest.get("n", 0) >= HYPE_MIN_HEADLINES and news_digest["hype_share"] >= HYPE_SHARE:
+        rv.challenges.append(Challenge(
+            "HYPE", "media hype", "info",
+            f"{news_digest['hype_share']:.0%} of the {news_digest['n']} recent headlines about {ticker} are forecasts or "
+            f"opinions from low-trust sources ({news_digest['window']}).",
+            {"share_predictive": news_digest["share_predictive"], "share_low_trust": news_digest["share_low_trust"],
+             "examples": news_digest.get("top_predictive", [])[:3], "classifier": news_digest.get("classifier")},
+            "Attention is not evidence either way: popular stocks can keep rising. Facts from high-trust sources are "
+            "listed separately: " + "; ".join(h["title"] for h in news_digest.get("top_descriptive", [])[:2]),
+            "Is the interest in this stock coming from its results, or from what people say about it?"))
     return rv
 
 

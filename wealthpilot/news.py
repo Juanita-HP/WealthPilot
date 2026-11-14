@@ -59,6 +59,10 @@ PUBLISHER_TIER = {
     "Moneywise": "aggregator", "TipRanks": "aggregator", "MarketBeat": "aggregator", "Investing.com": "aggregator",
     # promotional / social
     "Motley Fool": "promotional", "Stocktwits": "promotional", "InvestorPlace": "promotional",
+    # seen in the 2026-11-14 collection
+    "MT Newswires": "wire", "CBS News": "wire", "TheStreet": "media", "etf.com": "media", "decrypt": "media",
+    "TIKR": "aggregator", "Trefis": "aggregator",
+    "99bitcoins": "promotional", "BeInCrypto": "promotional", "CryptoProwl": "promotional",
 }
 DEFAULT_TIER = "aggregator"
 
@@ -126,6 +130,27 @@ CATEGORIES = ("earnings", "product", "legal_regulatory", "deal", "management", "
               "market_move", "esg_controversy", "other")
 
 
+# Words that show a headline is really about the asset (search results include loosely related stories).
+NAME_KEYWORDS = {
+    "AAPL": ["Apple", "iPhone"], "MSFT": ["Microsoft"], "NVDA": ["Nvidia", "Jensen Huang"],
+    "GOOGL": ["Alphabet", "Google"], "AMZN": ["Amazon", "AWS"], "TSLA": ["Tesla", "Cybercab", "Cybertruck"],
+    "JPM": ["JPMorgan", "Dimon"], "JNJ": ["Johnson & Johnson", "J&J"], "PG": ["Procter", "P&G", "Pampers", "Tide"],
+    "XOM": ["Exxon", "ExxonMobil", "Energy Stocks"], "RY.TO": ["Royal Bank", "RBC"], "TD.TO": ["TD Bank", "Toronto-Dominion"],
+    "MFC.TO": ["Manulife"], "ENB.TO": ["Enbridge"], "CNQ.TO": ["Canadian Natural"], "CNR.TO": ["Canadian National", "CN Rail"],
+    "FTS.TO": ["Fortis"], "ATD.TO": ["Couche-Tard", "Circle K"], "SHOP.TO": ["Shopify"], "CSU.TO": ["Constellation Software"],
+    "XIU.TO": ["TSX"], "SPY": ["S&P 500", "401(k)", "Fed", "PPI", "CPI", "Inflation"], "QQQ": ["Nasdaq", "QQQ", "Tech ETF", "AI trade", "AI Roundup"],
+    "ESGV": ["ESG"], "XBB.TO": ["Canadian bond"], "ZST.TO": ["short-term bond"], "AGG": ["Aggregate Bond"],
+    "TLT": ["Treasury", "Treasuries", "Interest Bill", "Debt"], "GLD": ["Gold", "Debt"],
+    "BTC-USD": ["Bitcoin", "BTC"], "ETH-USD": ["Ether", "Ethereum", "ETH"],
+}
+
+
+def is_relevant(h: dict) -> bool:
+    title = h["title"]
+    words = NAME_KEYWORDS.get(h.get("ticker", ""), []) + [h.get("ticker", "").split(".")[0].split("-")[0]]
+    return any(re.search(r"(?<![A-Za-z])" + re.escape(w) + r"(?![A-Za-z])", title, re.I) for w in words if w)
+
+
 @dataclass
 class Label:
     type: str
@@ -134,6 +159,7 @@ class Label:
     importance: int
     reason: str
     classifier: str
+    relevant: bool = True
 
     def to_dict(self):
         return asdict(self)
@@ -178,7 +204,7 @@ class RuleClassifier:
         if h.get("tier") == "official":
             importance = min(5, importance + 1)
         reason = f"{pred} predictive cue(s), {desc} descriptive cue(s); category keyword: {cat}"
-        return Label(typ, cat, sentiment, importance, reason, self.name)
+        return Label(typ, cat, sentiment, importance, reason, self.name, is_relevant(h))
 
 
 class LLMClassifier:
@@ -188,12 +214,13 @@ class LLMClassifier:
         "name": "record_label", "strict": True,
         "description": "Record the classification of one headline.",
         "input_schema": {"type": "object", "additionalProperties": False,
-                         "required": ["type", "category", "sentiment", "importance", "reason"],
+                         "required": ["type", "category", "sentiment", "importance", "relevant", "reason"],
                          "properties": {
                              "type": {"type": "string", "enum": list(TYPES)},
                              "category": {"type": "string", "enum": list(CATEGORIES)},
                              "sentiment": {"type": "number"},
                              "importance": {"type": "integer", "enum": [1, 2, 3, 4, 5]},
+                             "relevant": {"type": "boolean"},
                              "reason": {"type": "string"}}},
     }
 
@@ -212,14 +239,18 @@ class LLMClassifier:
             raise ValueError("classifier returned no label")
         x = dict(call.input)
         return Label(x["type"], x["category"], max(-1.0, min(1.0, float(x["sentiment"]))), int(x["importance"]),
-                     x["reason"], self.name)
+                     x["reason"], self.name, bool(x["relevant"]))
 
 
 # ----------------------------------------------------------------------------- evaluation against the golden set
 
 
-def evaluate(classifier, golden: list[dict]) -> dict:
-    """Agreement with human labels. Golden rows: headline fields + 'label' dict."""
+def evaluate(classifier, golden: list[dict], exclude_text: str = "") -> dict:
+    """Agreement with human labels. Golden rows: headline fields + 'label' dict.
+
+    Headlines quoted in ``exclude_text`` (a prompt's worked examples) are left out to avoid leakage.
+    """
+    golden = [g for g in golden if g["title"][:40] not in exclude_text]
     rows = []
     for g in golden:
         pred = classifier.classify(g)
@@ -228,6 +259,7 @@ def evaluate(classifier, golden: list[dict]) -> dict:
                      "sentiment_sign_ok": (pred.sentiment > 0.15) - (pred.sentiment < -0.15)
                      == (gold["sentiment"] > 0.15) - (gold["sentiment"] < -0.15),
                      "importance_error": abs(pred.importance - gold["importance"]),
+                     "relevance_ok": pred.relevant == gold.get("relevant", True),
                      "predicted_type": pred.type, "gold_type": gold["type"]})
     n = len(rows)
     pred_pred = [r for r in rows if r["predicted_type"] == "predictive"]
@@ -241,6 +273,7 @@ def evaluate(classifier, golden: list[dict]) -> dict:
         "category_accuracy": sum(r["category_ok"] for r in rows) / n,
         "sentiment_sign_accuracy": sum(r["sentiment_sign_ok"] for r in rows) / n,
         "importance_mae": sum(r["importance_error"] for r in rows) / n,
+        "relevance_accuracy": sum(r["relevance_ok"] for r in rows) / n,
         "errors": [r for r in rows if not r["type_ok"]],
     }
 
@@ -270,16 +303,20 @@ class Digest:
 
 
 def digest(ticker: str, headlines: list[dict], classifier=None, as_of: str | None = None) -> Digest:
-    """Aggregate classified headlines published up to ``as_of`` (point in time)."""
+    """Aggregate classified headlines published up to ``as_of`` (point in time), keeping relevant ones."""
     classifier = classifier or RuleClassifier()
     items = [h for h in headlines if as_of is None or h["published_at"] <= as_of]
-    rows = []
+    rows, dropped = [], 0
     for h in items:
         lab = classifier.classify(h)
+        if not lab.relevant:
+            dropped += 1
+            continue
         rows.append({**h, "label": lab.to_dict()})
     n = len(rows)
     if n == 0:
-        return Digest(ticker, 0, "", 0.0, 0.0, 0.0, 0.0, {}, [], [], classifier.name, ["No headlines available."])
+        return Digest(ticker, 0, "", 0.0, 0.0, 0.0, 0.0, {}, [], [], classifier.name,
+                      [f"No relevant headlines ({dropped} loosely related left out)."])
     pred = [r for r in rows if r["label"]["type"] == "predictive"]
     low = [r for r in rows if r["trust"] < LOW_TRUST]
     hype = [r for r in pred if r["trust"] < LOW_TRUST]
@@ -294,9 +331,23 @@ def digest(ticker: str, headlines: list[dict], classifier=None, as_of: str | Non
                       "importance": r["label"]["importance"], "link": r["link"]}
     dates = sorted(r["published_at"] for r in rows)
     notes = ["Headlines only (no article bodies). Recent news from Yahoo Finance's search endpoint; "
-             "the window is short and not a full history."]
+             "the window is short and not a full history.",
+             f"{dropped} loosely related headline(s) left out as not about {ticker}."]
     if n < 5:
         notes.append(f"Only {n} headlines: too few for conclusions.")
     return Digest(ticker, n, f"{dates[0][:10]} to {dates[-1][:10]}", len(pred) / n, len(low) / n, len(hype) / n,
                   sent, cats, [slim(r) for r in sorted([r for r in rows if r not in pred], key=key)[:5]],
                   [slim(r) for r in sorted(pred, key=key)[:5]], classifier.name, notes)
+
+
+def recent_headlines(ticker: str, max_age_hours: float = 12.0, count: int = 20, search=None) -> list[dict]:
+    """Headlines for a ticker from the local cache if fresh enough, otherwise fetched and cached."""
+    from datetime import timedelta
+    path = NEWS_DIR / "cache" / f"{ticker}.jsonl"
+    if path.exists():
+        rows = load_jsonl(path)
+        if rows and datetime.fromisoformat(rows[0]["retrieved_at"]) > datetime.now(timezone.utc) - timedelta(hours=max_age_hours):
+            return rows
+    rows = [h.to_dict() for h in fetch_headlines(ticker, count, search)]
+    save_jsonl(rows, path)
+    return rows

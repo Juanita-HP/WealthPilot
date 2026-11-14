@@ -64,6 +64,8 @@ Six tabs: profile, goals, time machine, ticker dashboard, strategy lab, devil's 
 | `wealthpilot/inflation.py` | Canadian CPI forecaster validated walk-forward (see `docs/model_card_inflation.md`) |
 | `wealthpilot/lab.py` | Strategy lab adapted from nicho-spekt/backtesting-engine, always against buy-and-hold and out of sample |
 | `wealthpilot/advocate.py` | Devil's advocate: evidence-based challenges with honest counterpoints |
+| `wealthpilot/news.py`, `wealthpilot/news_prompts/` | News as data: source trust tiers, descriptive vs predictive classification (rule baseline and versioned Claude prompts scored on a golden set, `scripts/eval_news.py`), relevance filter, hype share used by the devil's advocate |
+| `wealthpilot/goals.py`, `risks.py`, `whatif.py` | One sub-portfolio per goal with its own horizon; six kinds of risk; what would change the answer |
 | `wealthpilot/agents/` | Advisor and devil's advocate agents (Claude on Amazon Bedrock), tools with receipts, deterministic verifier |
 | `wealthpilot/aws/`, `infra/` | Lambda handler, S3 data sync, DynamoDB audit trail, SAM template (see `docs/aws.md`) |
 
