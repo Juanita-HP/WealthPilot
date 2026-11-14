@@ -41,6 +41,14 @@ python scripts/train_inflation.py        # inflation model + model card
 pytest
 ```
 
+### Demo interface
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+Six tabs: profile, goals, time machine, ticker dashboard, strategy lab, devil's advocate. The agents tab needs `WEALTHPILOT_LLM=bedrock` (AWS credentials) or `WEALTHPILOT_LLM=anthropic`.
+
 ### Core modules
 
 | Module | What it does |

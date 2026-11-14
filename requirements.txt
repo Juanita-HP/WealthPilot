@@ -1,6 +1,8 @@
 numpy>=1.26
 pandas>=2.1
 pytest>=8
+streamlit>=1.40
+plotly>=5.20
 # only for scripts/build_dataset.py
 yfinance>=0.2
 # optional, only for tests that cross-check indicators (pip install --use-pep517 ta)
