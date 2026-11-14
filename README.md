@@ -36,6 +36,8 @@ pip install -r requirements.txt
 Copy the organizers' starter files (`prices_daily.csv`, `fx_usdcad_daily.csv`, `macro_rates.csv`, `assets_universe.csv`, `corporate_actions.csv`) into `data/starter/`, or rebuild them with `python scripts/build_dataset.py`. The CSVs are git-ignored because Yahoo-derived data has redistribution limits. The yfinance cache (`data/cache/`) is git-ignored for the same reason.
 
 ```bash
+python scripts/fetch_macro_history.py   # macro history since 1995
+python scripts/train_inflation.py        # inflation model + model card
 pytest
 ```
 
@@ -50,6 +52,14 @@ pytest
 | `wealthpilot/assumptions.py` | Long-term planning assumptions from the FP Canada / Institute of Financial Planning 2026 Projection Assumption Guidelines (stated hypotheses, not forecasts) |
 | `wealthpilot/profile.py` | 10-question questionnaire scored on risk capacity and risk tolerance, risk level (lower of the two, capped by short horizons), constraints per level, goal analysis, allocation checker |
 | `wealthpilot/ticker.py` | Ticker dashboard backend: overview with provenance for every number, chart series per timeframe, growth score (from financial statements) and profile-fit score, each with its factor breakdown. Sources: `YFinanceSource` (live, cached) or `StarterSource` (offline) |
+| `wealthpilot/strategist.py`, `time_machine.py`, `validation.py` | Policy allocation with a reason per weight; replay in the investor's dollars and hypothetical shocks; out-of-sample validation |
+| `wealthpilot/inflation.py` | Canadian CPI forecaster validated walk-forward (see `docs/model_card_inflation.md`) |
+| `wealthpilot/lab.py` | Strategy lab adapted from nicho-spekt/backtesting-engine, always against buy-and-hold and out of sample |
+| `wealthpilot/advocate.py` | Devil's advocate: evidence-based challenges with honest counterpoints |
+| `wealthpilot/agents/` | Advisor and devil's advocate agents (Claude on Amazon Bedrock), tools with receipts, deterministic verifier |
+| `wealthpilot/aws/`, `infra/` | Lambda handler, S3 data sync, DynamoDB audit trail, SAM template (see `docs/aws.md`) |
+
+Architecture, agents, validation and limits: [`docs/architecture.md`](docs/architecture.md).
 
 To cross-check the NumPy metrics against the original C++ engine, build `metrics_cpp` for your platform and run `METRICS_CPP_PATH=<build dir> pytest`.
 

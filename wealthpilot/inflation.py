@@ -29,6 +29,7 @@ scripts/fetch_macro_history.py.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
@@ -44,7 +45,7 @@ LAMBDAS = (0.1, 1.0, 3.0, 10.0, 30.0, 100.0, 300.0, 1000.0)
 CV_VALIDATION_MONTHS = 36
 MIN_TRAIN_MONTHS = 60
 INTERVAL = (0.10, 0.90)
-ARTIFACT = Path(__file__).resolve().parent.parent / "models" / "inflation_model.json"
+ARTIFACT = Path(os.environ.get("WEALTHPILOT_MODEL_PATH", Path(__file__).resolve().parent.parent / "models" / "inflation_model.json"))
 
 FEATURES = {  # name -> why it is in the model
     "yoy": "Current inflation: inflation is persistent.",

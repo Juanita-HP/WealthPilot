@@ -21,11 +21,12 @@ Conventions
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pandas as pd
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "starter"
+DATA_DIR = Path(os.environ.get("WEALTHPILOT_DATA_DIR", Path(__file__).resolve().parent.parent / "data" / "starter"))
 BASE_CURRENCY = "CAD"
 FFILL_LIMIT = 5
 MONTHLY_SERIES = {"STATIC_TOTALCPICHANGE", "CPIAUCSL", "UNRATE", "V41690973", "CPIW"}
