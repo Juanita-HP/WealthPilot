@@ -47,6 +47,35 @@ CANADIAN_BOND_SHARE = 0.75    # AGG adds USD currency risk to the safe sleeve
 GROWTH_TILT_MAX = 1 / 3       # at most a third of the U.S. sleeve in QQQ
 CRYPTO_STRATEGIC_SHARE = 0.5  # use half of the crypto limit, never all of it
 
+# Themes the investor can pick. Each maps to assets of the universe. Themes never replace the
+# diversified core: they become small "satellite" positions taken from the stock sleeve, within the
+# single-security limit, the sector limit and the investor's exclusions.
+THEMES = {
+    "tech_ai": ("Technologie et IA", ["QQQ"]),
+    "canadian_banks": ("Banques canadiennes", ["RY.TO", "TD.TO"]),
+    "dividends": ("Dividendes et revenu", ["FTS.TO", "ENB.TO", "JNJ", "PG"]),
+    "energy": ("Énergie et ressources", ["CNQ.TO", "XOM", "ENB.TO"]),
+    "health": ("Santé", ["JNJ"]),
+    "consumer": ("Consommation de base", ["PG", "ATD.TO"]),
+    "ecommerce": ("Commerce en ligne", ["AMZN", "SHOP.TO"]),
+    "software_ca": ("Logiciels canadiens", ["CSU.TO", "SHOP.TO"]),
+    "megacap_tech": ("Géants technologiques américains", ["MSFT", "AAPL", "GOOGL", "NVDA"]),
+    "ev_mobility": ("Véhicules électriques", ["TSLA"]),
+    "infrastructure": ("Infrastructures et transport", ["CNR.TO", "FTS.TO"]),
+    "insurance": ("Assurance", ["MFC.TO"]),
+    "gold": ("Or et valeurs refuges", ["GLD"]),
+    "crypto": ("Cryptoactifs", ["BTC-USD"]),
+    "esg": ("Investissement responsable (ESG)", ["ESGV"]),
+}
+THEME_ALIASES = {"Information Technology": "tech_ai"}
+SATELLITE_SHARE = {1: 0.0, 2: 0.05, 3: 0.10, 4: 0.15, 5: 0.20}  # of the stock sleeve
+SATELLITES_PER_THEME = 2
+MIN_SATELLITE = 0.01  # a position under 1% adds noise, not exposure
+
+
+def normalize_themes(themes) -> list[str]:
+    return list(dict.fromkeys(THEME_ALIASES.get(t, t) for t in themes if THEME_ALIASES.get(t, t) in THEMES))
+
 
 @dataclass
 class Line:
@@ -124,7 +153,8 @@ def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = No
                       f"{c.equity_min:.0%} to {c.equity_max:.0%} in stocks)."))
     esg = p.esg in {"prefer", "exclude"}
     tilt = 0.0
-    if "Information Technology" in p.themes and profile.level >= 4 and not esg:
+    themes = normalize_themes(p.themes)
+    if "tech_ai" in themes and profile.level >= 4 and not esg:
         tilt = us * GROWTH_TILT_MAX
         lines.append(Line(BLOCKS["us_growth"], tilt, "us_growth",
                           "Technology interest: a third of the U.S. sleeve in the Nasdaq-100; a tilt, not extra "
@@ -158,6 +188,9 @@ def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = No
                           f"Bitcoin: half of the {c.max_crypto:.0%} crypto limit. Ether is left out because it adds "
                           "little diversification." + _q(ev, "corr_btc_eth", "Weekly correlation BTC/ETH {:.2f}")))
 
+    lines, theme_notes = _theme_satellites(lines, themes, profile, ev)
+    notes += theme_notes
+
     if p.simplicity:
         # Fewer, simpler holdings: fold U.S. bonds into Canadian bonds, drop gold and the growth tilt.
         merged: list[Line] = []
@@ -183,6 +216,62 @@ def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = No
     total = sum(weights.values())
     weights = {k: v / total for k, v in weights.items()}  # removes floating-point drift only
     return Allocation(weights, lines, "policy rules v1", notes, ev)
+
+
+def _theme_satellites(lines: list[Line], themes: list[str], profile: InvestorProfile, ev: dict):
+    """Turn picked themes into small satellite positions funded from the core stock lines."""
+    from .data import load_universe
+
+    c = profile.constraints
+    notes: list[str] = []
+    skip = {"tech_ai", "esg", "crypto", "gold"}  # handled by the core rules (QQQ tilt, ESGV, crypto, gold lines)
+    picks = [t for t in themes if t not in skip]
+    if "esg" in themes and profile.preferences.esg == "none":
+        notes.append("ESG theme noted: set the ESG preference to use the screened fund for U.S. stocks.")
+    if not picks:
+        return lines, notes
+    core = [ln for ln in lines if ln.block in {"canadian_equity", "us_equity"}]
+    stock_sleeve = sum(ln.weight for ln in lines if ln.block in {"canadian_equity", "us_equity", "us_growth"})
+    budget = stock_sleeve * SATELLITE_SHARE[profile.level]
+    if budget <= 0:
+        notes.append(f"Themes noted but not added: level {profile.level} keeps the whole stock share in broad funds.")
+        return lines, notes
+    try:
+        universe = load_universe()
+    except FileNotFoundError:
+        return lines, notes + ["Themes not applied: asset universe not available."]
+    candidates: dict[str, list[str]] = {}
+    for th in picks:
+        ok = [t for t in THEMES[th][1] if t in universe.index and universe.loc[t, "sector"] not in c.excluded_sectors]
+        candidates[th] = ok[:SATELLITES_PER_THEME]
+    chosen: list[tuple[str, str]] = []
+    for rank in range(SATELLITES_PER_THEME):  # round robin: every theme gets its first pick before any second pick
+        for th in picks:
+            if rank < len(candidates[th]) and candidates[th][rank] not in [x for x, _ in chosen]:
+                chosen.append((candidates[th][rank], th))
+    if not chosen:
+        return lines, notes + ["Themes noted, but every matching asset is excluded by the investor's preferences."]
+    max_picks = max(1, int(budget / MIN_SATELLITE))
+    if len(chosen) > max_picks:
+        notes.append(f"Only {max_picks} theme position(s) fit at level {profile.level}: "
+                     f"{', '.join(t for t, _ in chosen[max_picks:])} left out to keep each position at 1% or more.")
+        chosen = chosen[:max_picks]
+    each = min(budget / len(chosen), c.limits.max_single_security)
+    used = each * len(chosen)
+    core_total = sum(ln.weight for ln in core)
+    out = []
+    for ln in lines:
+        if ln in core:
+            out.append(Line(ln.ticker, ln.weight - used * ln.weight / core_total, ln.block, ln.reason))
+        else:
+            out.append(ln)
+    for t, th in chosen:
+        out.append(Line(t, each, "satellite",
+                        f"Theme '{THEMES[th][0]}': satellite position of {each:.1%}, funded from the broad stock funds "
+                        f"and kept under the {c.limits.max_single_security:.1%} single-holding limit."))
+    notes.append(f"Themes use {used:.1%} of the portfolio ({SATELLITE_SHARE[profile.level]:.0%} of the stock share at "
+                 f"level {profile.level}); the rest stays in broad index funds.")
+    return out, notes
 
 
 def inverse_vol_allocation(profile: InvestorProfile, prices: pd.DataFrame, end=None,

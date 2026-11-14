@@ -296,6 +296,7 @@ class InvestorProfile:
     goal_analysis: dict | None
     reasons: list[Reason]
     flags: list[Flag]
+    financials: dict | None = None   # set when the profile comes from the numeric onboarding
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -378,7 +379,14 @@ def choose_level(profile: "InvestorProfile", requested: int) -> tuple["InvestorP
 
 
 def build_profile(answers: dict[str, str], preferences: Preferences = Preferences(),
-                  goal: Goal | None = None) -> InvestorProfile:
+                  goal: Goal | None = None, capacity_override: tuple[float, list] | None = None,
+                  horizon_cap: bool = True, financials: dict | None = None) -> InvestorProfile:
+    """Profile from questionnaire answers.
+
+    ``capacity_override`` (score, reasons) replaces the capacity questions with a capacity
+    computed from real numbers (see onboarding.py). With ``horizon_cap=False`` the overall level
+    is not capped by a single horizon: each goal applies its own horizon cap instead.
+    """
     missing = [q.id for q in QUESTIONS if q.id not in answers]
     if missing:
         raise ValueError(f"missing answers: {missing}")
@@ -386,7 +394,7 @@ def build_profile(answers: dict[str, str], preferences: Preferences = Preference
             or preferences.region not in REGION_HOME_SHARE:
         raise ValueError(f"invalid preferences: {preferences}")
 
-    capacity, cap_reasons = _dimension_score(answers, "capacity")
+    capacity, cap_reasons = capacity_override if capacity_override else _dimension_score(answers, "capacity")
     tolerance, tol_reasons = _dimension_score(answers, "tolerance")
     risk = min(capacity, tolerance)
     level = level_from_score(risk)
@@ -399,7 +407,7 @@ def build_profile(answers: dict[str, str], preferences: Preferences = Preference
                           f"the level follows the lower one ({lower}).",
                           {"capacity": capacity, "tolerance": tolerance}))
 
-    cap = HORIZON_LEVEL_CAP.get(answers["horizon"])
+    cap = HORIZON_LEVEL_CAP.get(answers["horizon"]) if horizon_cap else None
     if cap is not None and level > cap:
         flags.append(Flag("HORIZON_CAP", "warning",
                           f"A horizon of '{QUESTION_BY_ID['horizon'].option(answers['horizon']).label}' limits the "
@@ -407,7 +415,7 @@ def build_profile(answers: dict[str, str], preferences: Preferences = Preference
                           {"score_level": level, "cap": cap}))
         level = cap
 
-    if answers["emergency_fund"] == "none":
+    if capacity_override is None and answers["emergency_fund"] == "none":
         flags.append(Flag("NO_EMERGENCY_FUND", "warning",
                           "No emergency fund: an unexpected expense could force a sale at a bad time. "
                           "Building 3 to 6 months of expenses in cash usually comes first."))
@@ -444,7 +452,7 @@ def build_profile(answers: dict[str, str], preferences: Preferences = Preference
         answers=dict(answers), preferences=preferences, capacity=capacity, tolerance=tolerance,
         risk_score=risk, level=level, level_name=lv.name, experience=answers["experience"],
         constraints=constraints, expected=expected, goal_analysis=goal_analysis,
-        reasons=cap_reasons + tol_reasons, flags=flags,
+        reasons=cap_reasons + tol_reasons, flags=flags, financials=financials,
     )
 
 

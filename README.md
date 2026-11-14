@@ -47,7 +47,7 @@ pytest
 streamlit run app/streamlit_app.py
 ```
 
-Six tabs: profile, goals, time machine, ticker dashboard, strategy lab, devil's advocate. The agents tab needs `WEALTHPILOT_LLM=bedrock` (AWS credentials) or `WEALTHPILOT_LLM=anthropic`.
+Create a (fictional) account, then a six-step onboarding in dollars (situation, finances, goals, risk comfort, experience and themes, summary); the profile is saved and reloaded at the next login. The dashboard has six tabs: plan by goal, time machine, ticker dashboard with news, strategy lab, devil's advocate, profile. Demo personas (Amira, Mateo, Robert) prefill the onboarding. Accounts are stored locally (`data/users/`, git-ignored) with salted PBKDF2 hashes; Amazon Cognito would replace this in a deployment. The agents tab needs `WEALTHPILOT_LLM=bedrock` (AWS credentials) or `WEALTHPILOT_LLM=anthropic`.
 
 ### Core modules
 
@@ -66,6 +66,7 @@ Six tabs: profile, goals, time machine, ticker dashboard, strategy lab, devil's 
 | `wealthpilot/advocate.py` | Devil's advocate: evidence-based challenges with honest counterpoints |
 | `wealthpilot/news.py`, `wealthpilot/news_prompts/` | News as data: source trust tiers, descriptive vs predictive classification (rule baseline and versioned Claude prompts scored on a golden set, `scripts/eval_news.py`), relevance filter, hype share used by the devil's advocate |
 | `wealthpilot/goals.py`, `risks.py`, `whatif.py` | One sub-portfolio per goal with its own horizon; six kinds of risk; what would change the answer |
+| `wealthpilot/onboarding.py`, `wealthpilot/accounts.py` | Numeric onboarding: capacity from emergency months, share of assets invested, debt to income, savings rate, employment and dependents; flags (cushion short, savings over-committed, high debt); demo accounts |
 | `wealthpilot/agents/` | Advisor and devil's advocate agents (Claude on Amazon Bedrock), tools with receipts, deterministic verifier |
 | `wealthpilot/aws/`, `infra/` | Lambda handler, S3 data sync, DynamoDB audit trail, SAM template (see `docs/aws.md`) |
 

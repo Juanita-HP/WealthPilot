@@ -7,7 +7,7 @@ WealthPilot is an educational investment simulation. It builds an investor profi
 | Point raised (finance workshop and case kick-off) | In WealthPilot |
 |---|---|
 | People invest for goals; one portfolio holds several horizons; horizon is the goal's, not the person's age | `goals.py`: a sub-portfolio and account suggestion per goal, level capped by the goal's horizon, cash-only under 2 years, emergency fund always cash-like |
-| Capacity to absorb risk is not tolerance | `profile.py`: two separate scores; the level follows the lower |
+| Capacity to absorb risk is not tolerance | `onboarding.py`: capacity measured from the investor's own numbers (cushion in months, share of assets invested, debt/income, savings rate, job stability, dependents); tolerance from behaviour questions asked in their dollars; the level follows the lower |
 | Preferences sit inside constraints, never above | `profile.constraints_for`: preferences (ESG, values, crypto interest, simplicity) are applied within the level's limits and flagged when a limit wins |
 | Kinds of risk: market, credit, liquidity, currency, concentration, inflation | `risks.py`: risk map with level, number and reason for each |
 | Diversify across asset classes, regions, sectors, management style | strategist sleeves, exposure alerts, risk map |
