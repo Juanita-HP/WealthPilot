@@ -92,11 +92,22 @@ class Headline:
         return asdict(self)
 
 
+SEARCH_URL = "https://query2.finance.yahoo.com/v1/finance/search?q={q}&newsCount={n}&quotesCount=0"
+
+
+def yahoo_search(query: str, count: int) -> list[dict]:
+    """Yahoo Finance's public search endpoint (the one yfinance.Search uses), without extra dependencies."""
+    import urllib.parse
+    import urllib.request
+    url = SEARCH_URL.format(q=urllib.parse.quote(query), n=count)
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.load(r).get("news", [])
+
+
 def fetch_headlines(ticker: str, count: int = 20, search=None) -> list[Headline]:
-    """Recent headlines for one ticker. ``search`` is injectable for tests (defaults to yfinance.Search)."""
-    if search is None:
-        import yfinance as yf
-        search = lambda q, n: yf.Search(q, news_count=n, max_results=1).news  # noqa: E731
+    """Recent headlines for one ticker. ``search`` is injectable for tests."""
+    search = search or yahoo_search
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     out = []
     for item in search(ticker, count) or []:
@@ -168,7 +179,8 @@ class Label:
 PREDICTIVE_CUES = re.compile(
     r"\b(could|may|might|will|would|expect(s|ed)?|forecast|outlook|predict(s|ion)?|price target|target|"
     r"poised|set to|likely|should|upside|downside|top pick|buy now|to buy|to sell|why .* (is|could|will)|"
-    r"here'?s why|best|worst|bull(ish)?|bear(ish)?|could soar|could crash|undervalued|overvalued|forget)\b", re.I)
+    r"here'?s why|best|worst|bull(ish)?|bear(ish)?|could soar|could crash|undervalued|overvalued|forget|"
+    r"takes?|verdict|thinks?|bets?|calls? for|flags?|warns?|about to|ways to)\b", re.I)
 DESCRIPTIVE_CUES = re.compile(
     r"\b(reports?|reported|posts?|posted|announc(es|ed)|declares?|declared|files?|filed|opens?|opened|"
     r"breaks ground|launch(es|ed)|cuts?|raises?|raised|approv(es|ed)|completes?|completed|fell|rose|jumps?|"
@@ -189,8 +201,8 @@ NEG = re.compile(r"\b(miss|plunge|slump|fall|fell|cut|lawsuit|probe|recall|weak|
 
 
 class RuleClassifier:
-    """Offline baseline (version 'rules-v1'): keyword cues, documented and deterministic."""
-    name = "rules-v1"
+    """Offline baseline (version rules-v2): keyword cues, documented and deterministic."""
+    name = "rules-v2"
 
     def classify(self, h: dict) -> Label:
         title = h["title"]
