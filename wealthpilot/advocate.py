@@ -192,11 +192,15 @@ HYPE_MIN_HEADLINES = 4
 
 def review_trade(ticker: str, weight: float, current: dict[str, float], profile: InvestorProfile,
                  prices: pd.DataFrame, universe: pd.DataFrame, risk: dict | None = None,
-                 news_digest: dict | None = None, macro_items: list[dict] | None = None) -> Review:
+                 news_digest: dict | None = None, macro_items: list[dict] | None = None,
+                 liquidity: dict | None = None, amount: float | None = None, leveraged: bool = False) -> Review:
     """Challenge a request to put ``weight`` of the portfolio in ``ticker``.
 
     ``macro_items``: recent official news (``macro_news.recent``). If the trade makes the portfolio depend much
     more on a factor that is in the news right now, the challenge shows it.
+    ``liquidity``: recent traded value (``coverage.liquidity``) and ``amount`` the portfolio size in CAD; the
+    challenge appears only when trading the position could be costly or slow.
+    ``leveraged``: a fund whose name says it multiplies or inverts daily returns.
     """
     if ticker not in universe.index:
         raise KeyError(f"{ticker} is not in the asset universe")
@@ -256,6 +260,17 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
               if asset_class in {"equity", "crypto"} else None)
     if recent:
         rv.challenges.append(recent)
+    liq = liquidity_challenge(ticker, asset_class, weight * amount if amount else None, liquidity)
+    if liq:
+        rv.challenges.append(liq)
+    if leveraged:
+        rv.challenges.append(Challenge(
+            "LEVERAGED_FUND", "leveraged or inverse fund", "warning",
+            f"{universe.loc[ticker, 'name']} multiplies or inverts the DAILY return of its index. Held for weeks or "
+            "more, its result can be far from the multiple of the index's return, even in the expected direction.",
+            {"name": universe.loc[ticker, "name"]},
+            "These funds are built for very short-term trading; some professionals use them for a day.",
+            "Do you plan to watch and trade this position every day?"))
     news_exp = news_exposure_change(current, proposed, universe, macro_items or [])
     if news_exp:
         rv.challenges.append(Challenge(
@@ -269,6 +284,55 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
             "share, the more the next announcement of the same kind will matter.",
             "Do you want the next announcement on this topic to affect this much of your money?"))
     return rv
+
+
+# Liquidity (stated rules): average daily traded value over the last three months, in CAD.
+THIN_ADV = 20_000_000          # same threshold as the risk map: under it, a stock counts as less liquid
+VERY_THIN_ADV = 2_000_000      # under it, spreads and the price impact of selling are usually large
+ETF_THIN_ADV = 1_000_000       # ETFs trade against their holdings, so only very small volume matters
+POSITION_SHARE = 0.01          # an order above 1% of a normal day's trading can move the price
+ZERO_DAYS = 0.10               # more than 10% of days without trades: prices go stale
+
+
+def liquidity_challenge(ticker: str, asset_class: str, position_cad: float | None, liq: dict | None) -> Challenge | None:
+    """Only when it matters: thinly traded asset, a position that is a visible part of a day's trading, or stale prices."""
+    if not liq:
+        return None
+    adv, zero = liq["adv_cad"], liq["zero_volume_share"]
+    share = position_cad / adv if position_cad and adv > 0 else None
+    fund = asset_class.startswith("etf")
+    reasons, severity = [], "info"
+    if fund:
+        if adv < ETF_THIN_ADV:
+            reasons.append(f"about ${adv:,.0f} of it trades on an average day, which is very little for a fund")
+    elif adv < VERY_THIN_ADV:
+        reasons.append(f"only about ${adv:,.0f} of it trades on an average day")
+        severity = "warning"
+    elif adv < THIN_ADV and asset_class == "equity":
+        reasons.append(f"about ${adv / 1e6:,.1f} million of it trades on an average day, under the "
+                       f"${THIN_ADV / 1e6:.0f} million used here for a liquid stock")
+    if share is not None and share >= POSITION_SHARE and (not fund or adv < ETF_THIN_ADV):
+        reasons.append(f"your position (${position_cad:,.0f}) would be {share:.1%} of a normal day's trading")
+        severity = "warning"
+    if zero > ZERO_DAYS:
+        reasons.append(f"no trade at all on {zero:.0%} of recent days")
+        severity = "warning"
+    if not reasons:
+        return None
+    counter = ("ETF market makers can create and redeem units against the fund's holdings, so the screen volume "
+               "understates how much can be traded; the bid-ask spread still shows the real cost."
+               if fund else
+               "Low volume is not a flaw of the company itself, and a patient investor with limit orders can trade "
+               "it; the cost is the spread and the time it can take to sell in a falling market.")
+    if asset_class == "crypto":
+        counter = ("Reported crypto volume adds many exchanges and is often inflated; what counts is depth on the "
+                   "exchange you would use.")
+    return Challenge(
+        "LIQUIDITY", "liquidity", severity,
+        f"{ticker}: " + "; ".join(reasons) + f" ({liq['window']}). Buying is easy, selling fast at a fair price "
+        "may not be, and the gap between buying and selling prices is a cost you pay each way.",
+        {**liq, "position_cad": position_cad, "position_share_of_day": share},
+        counter, "Could you wait days or weeks to sell this position without needing the money?")
 
 
 def esg_controversy_challenge(profile: InvestorProfile, news_digest: dict | None,

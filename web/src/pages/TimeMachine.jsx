@@ -1,6 +1,50 @@
-import { useEffect, useState } from "react";
-import { api, dollars, signedPct, go } from "../lib.js";
-import { ValueChart } from "../components/Charts.jsx";
+import { useEffect, useMemo, useState } from "react";
+import { PALETTE, api, dollars, pct, signedPct, go } from "../lib.js";
+import { GrowthChart, ValueChart } from "../components/Charts.jsx";
+
+// The plan's holdings and the plan itself against the rise in the cost of living, over the same five years.
+function VsInflation({ v }) {
+  const series = useMemo(() => [
+    { label: "Cost of living (CPI)", values: v.inflation.growth, color: "#c45454", dash: [6, 4], width: 2.4, order: 0 },
+    { label: "Your plan", values: v.plan.growth, color: "#172025", width: 3, order: 0 },
+    ...v.holdings.map((h, i) => ({ label: h.ticker, values: h.growth, color: PALETTE[(i + 1) % PALETTE.length], width: 1.2 })),
+  ], [v]);
+  const beat = v.holdings.filter(h => h.beats_inflation).length;
+  return (
+    <>
+      <h2 className="section-title">Our investments vs inflation</h2>
+      <div className="card">
+        <p style={{ marginTop: 0 }}>
+          Over {v.start} to {v.end}, the cost of living rose <b>{pct(v.inflation.total, 1)}</b> ({pct(v.inflation.annual, 1)} a year).
+          Your plan grew <b>{signedPct(v.plan.total_return, 1)}</b>, that is <b className={v.plan.beats_inflation ? "up" : "down"}>
+          {signedPct(v.plan.real_annual_return, 1)} a year above inflation</b>. {beat} of its {v.holdings.length} holdings beat inflation.
+        </p>
+        <div className="chart-area" style={{ height: 340 }}><GrowthChart dates={v.dates} series={series} /></div>
+        <p className="muted small">Growth of 100 invested at the start. Click a name in the legend to hide or show it.</p>
+        <table className="data">
+          <thead><tr><th>Holding</th><th className="num">Share of plan</th><th className="num">Total</th>
+            <th className="num">Per year</th><th className="num">Per year after inflation</th><th>Beat inflation?</th></tr></thead>
+          <tbody>
+            {[v.plan, ...v.holdings].map(h => (
+              <tr key={h.ticker || "plan"} style={h.ticker ? undefined : { fontWeight: 700 }}>
+                <td>{h.ticker ? <><b>{h.ticker}</b> · {h.name}</> : "Your plan"}</td>
+                <td className="num">{pct(h.weight)}</td>
+                <td className="num">{signedPct(h.total_return, 1)}</td>
+                <td className="num">{signedPct(h.annual_return, 1)}</td>
+                <td className={"num " + (h.beats_inflation ? "up" : "down")}>{signedPct(h.real_annual_return, 1)}</td>
+                <td>{h.beats_inflation ? "Yes" : "No"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="muted small">
+          {v.note} Bond and short-term funds are in the plan to cushion falls, not to beat inflation by much: judge them
+          with the worst fall above, not only with this table. Inflation: {v.inflation.source}.
+        </p>
+      </div>
+    </>
+  );
+}
 
 export default function TimeMachine() {
   const [d, setD] = useState(null);
@@ -49,6 +93,7 @@ export default function TimeMachine() {
         <div className="analysis-stat"><span>Worst fall</span><strong>{signedPct(-Math.abs(d.worst.drawdown))}</strong></div>
         <div className="analysis-stat"><span>Worst 12 months</span><strong>{signedPct(d.worst_12_months.return)}</strong></div>
       </div>
+      {d.vs_inflation && <VsInflation v={d.vs_inflation} />}
       <h2 className="section-title">Hypothetical scenarios</h2>
       <div className="card">
         <p style={{ marginTop: 0 }} className="muted small">Stylized shocks to test the plan. Hypotheses, not forecasts.</p>

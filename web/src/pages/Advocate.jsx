@@ -1,5 +1,75 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, pct } from "../lib.js";
+
+// Search limited to investments the devil's advocate can review (stored universe + live assets that pass the data
+// rules on the server). Matches without enough data are not offered; their number is shown.
+function AssetSearch({ value, onPick }) {
+  const [query, setQuery] = useState("");
+  const [data, setData] = useState(null);
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const [loading, setLoading] = useState(false);
+  const token = useRef(0);
+
+  useEffect(() => {
+    const id = ++token.current;
+    setLoading(true);
+    const timer = setTimeout(() => {
+      api("/advocate/search?q=" + encodeURIComponent(query.trim()))
+        .then(r => { if (id === token.current) { setData(r); setActive(-1); } })
+        .catch(e => { if (id === token.current) setData({ results: [], hidden: 0, note: e.message }); })
+        .finally(() => { if (id === token.current) setLoading(false); });
+    }, query.trim() ? 350 : 0);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const results = data?.results || [];
+  const pick = item => { onPick(item); setQuery(""); setOpen(false); };
+  const onKeyDown = e => {
+    if (e.key === "Escape") { setOpen(false); return; }
+    if (!results.length) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setActive((active + 1) % results.length); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActive((active - 1 + results.length) % results.length); }
+    else if (e.key === "Enter") { e.preventDefault(); pick(results[active >= 0 ? active : 0]); }
+  };
+  return (
+    <div className="advocate-search">
+     <div className="searchbox">
+      <div className="searchform compact">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="10.8" cy="10.8" r="7.2" /><path d="m16.2 16.2 5 5" />
+        </svg>
+        <input placeholder={value?.symbol ? `${value.symbol}${value.name ? " · " + value.name : ""} (type to change)` : "Search a stock, ETF or crypto"}
+               value={query} autoComplete="off" spellCheck="false" aria-label="Search an investment to review"
+               onChange={e => { setQuery(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)}
+               onBlur={() => setTimeout(() => setOpen(false), 150)} onKeyDown={onKeyDown} />
+      </div>
+      {open && (
+        <div className="suggestions">
+          {loading && !results.length && <div className="suggestion"><small>Checking which matches have enough data…</small></div>}
+          {results.map((item, i) => (
+            <div key={item.symbol} className={"suggestion" + (i === active ? " active" : "")}
+                 onMouseDown={e => { e.preventDefault(); pick(item); }}>
+              <div><strong>{item.symbol}</strong><small>{item.name}</small></div>
+              <em>{item.type}{item.exchange ? " · " + item.exchange : ""}</em>
+            </div>
+          ))}
+          {!loading && !results.length && <div className="suggestion"><small>No investment with enough data matches “{query}”.</small></div>}
+          {(data?.hidden > 0 || data?.note) && (
+            <div className="suggestion muted-row">
+              <small>
+                {data.hidden > 0 && `${data.hidden} other match${data.hidden > 1 ? "es are" : " is"} not offered: not enough data for a reviewed answer. `}
+                {data.note}
+              </small>
+            </div>
+          )}
+        </div>
+      )}
+     </div>
+      {data?.rules && <p className="muted small" style={{ margin: "8px 2px 0" }}>{data.rules}</p>}
+    </div>
+  );
+}
 
 const METRICS = [["cagr", "Annual return", true], ["volatility", "Volatility", true], ["max_drawdown", "Worst fall", true], ["sharpe", "Sharpe ratio", false]];
 
@@ -96,10 +166,10 @@ function FormattedAnswer({ text }) {
 }
 
 export default function Advocate() {
-  const [universe, setUniverse] = useState([]);
   // A stock sent from its research page ("Challenge this stock with the Devil's Advocate").
   const [fromResearch] = useState(() => { try { return sessionStorage.getItem("wp_advocate_symbol"); } catch { return null; } });
-  const [symbol, setSymbol] = useState(fromResearch || "TSLA");
+  const [asset, setAsset] = useState({ symbol: fromResearch || "TSLA", name: fromResearch ? "" : "Tesla" });
+  const symbol = asset.symbol;
   const [weight, setWeight] = useState(30);
   const [review, setReview] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -107,25 +177,20 @@ export default function Advocate() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState(null);
 
-  useEffect(() => { api("/universe").then(setUniverse).catch(e => setError(e.message)); }, []);
   useEffect(() => { try { sessionStorage.removeItem("wp_advocate_symbol"); } catch { /* storage off */ } }, []);
   const suggested = "Ask the AI agents to analyze how recent news and risks on " + symbol + " affect my profile";
 
-  const run = async () => {
+  const run = async (sym = symbol) => {
     setBusy(true); setError("");
-    try { setReview(await api("/advocate", { method: "POST", body: { symbol, weight: weight / 100 } })); }
-    catch (e) { setError(e.message); }
+    try {
+      const r = await api("/advocate", { method: "POST", body: { symbol: sym, weight: weight / 100 } });
+      setReview(r);
+      if (r.asset) setAsset({ symbol: r.asset.symbol, name: r.asset.name });
+    }
+    catch (e) { setError(e.message); setReview(null); }
     finally { setBusy(false); }
   };
-  useEffect(() => {
-    if (!universe.length) return;
-    if (!universe.some(u => u.ticker === symbol)) {
-      setError(`${symbol} is not in the simulation's asset universe yet: the devil's advocate reviews listed assets only.`);
-      setSymbol("TSLA");
-      return;
-    }
-    run();
-  }, [universe.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { run(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ask = async () => {
     setAnswer({ loading: true });
@@ -144,10 +209,8 @@ export default function Advocate() {
       <div className="question-card" style={{ marginTop: 0 }}>
         <div className="form-grid">
           <div className="field">
-            <label>I want to put…</label>
-            <select value={symbol} onChange={e => setSymbol(e.target.value)}>
-              {universe.map(u => <option key={u.ticker} value={u.ticker}>{u.ticker} · {u.name}</option>)}
-            </select>
+            <label>I want to put… <b>{symbol}</b>{asset.name ? " · " + asset.name : ""}</label>
+            <AssetSearch value={asset} onPick={item => { setAsset(item); run(item.symbol); }} />
           </div>
           <div className="field">
             <label>…this share of my portfolio: {weight}%</label>
@@ -156,12 +219,18 @@ export default function Advocate() {
             </div>
           </div>
         </div>
-        <div className="question-actions"><span /><button className="primary-btn" disabled={busy} onClick={run}>{busy ? "Reviewing…" : "Review this idea →"}</button></div>
+        <div className="question-actions"><span /><button className="primary-btn" disabled={busy} onClick={() => run()}>{busy ? "Reviewing…" : "Review this idea →"}</button></div>
       </div>
       {error && <div className="error-text">{error}</div>}
       {review && (
         <>
           <div className={"pill " + review.verdict.tone} style={{ fontSize: 16, marginTop: 26 }}>{review.verdict.text}</div>
+          {review.asset && (
+            <p className="muted small" style={{ marginTop: 10 }}>
+              {review.asset.symbol} · {review.asset.name} · {review.asset.type}. Data: {review.asset.basis}.
+              {review.asset.liquidity && ` Traded on an average day: about $${Math.round(review.asset.liquidity.adv_cad).toLocaleString("en-CA")} CAD (${review.asset.liquidity.window}).`}
+            </p>
+          )}
           <div style={{ marginTop: 16 }}>
             {review.challenges.length === 0 && <div className="card"><p style={{ marginTop: 0 }}>Nothing deserves a challenge here.</p></div>}
             {review.challenges.map(c => (

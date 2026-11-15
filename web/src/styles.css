@@ -29,7 +29,7 @@ nav button{background:none;border:0;height:100%;position:relative;font-size:14px
 nav button.active:after{content:"";height:3px;background:var(--gold);position:absolute;bottom:0;left:0;right:0}
 .profile{margin-left:auto;width:35px;height:35px;border:2px solid var(--ink);border-radius:50%;display:grid;place-items:center;background:none;color:var(--ink);padding:0}
 main{max-width:1370px;margin:auto;padding:28px 30px 80px}
-#home{min-height:calc(100vh - 170px);display:flex;flex-direction:column;align-items:center;justify-content:center;padding-bottom:100px}
+#home{display:flex;flex-direction:column;align-items:center;padding:90px 0 80px}
 #home h1{font-size:clamp(42px,6vw,78px);letter-spacing:-3.5px;margin:0 0 60px;text-align:center}
 .searchbox{position:relative;width:100%;max-width:900px}
 .searchform{height:80px;background:white;border:1px solid #d9d7d2;border-radius:16px;display:flex;align-items:center;padding:9px 10px 9px 25px;gap:18px}
@@ -399,3 +399,37 @@ table.data td.num,table.data th.num{text-align:right;white-space:nowrap}
 .entry-way p{margin:10px 0 0;line-height:1.6}
 .entry-verdict{font-size:14px;line-height:1.7;margin-top:18px}
 @media(max-width:800px){.entry-ways{grid-template-columns:1fr}}
+
+/* search page: typed heading, market cards with daily charts */
+#home h1 .typed{color:#a28a61}
+#home h1 .caret{display:inline-block;width:.06em;height:.9em;margin-left:.05em;background:currentColor;vertical-align:-.08em;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion: reduce){#home h1 .caret{animation:none}}
+.markets{width:100%;max-width:1100px;margin-top:70px}
+.market-section{margin-top:34px}
+.market-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.market-head h2{margin:0;font-size:22px;letter-spacing:-.5px}
+.market-head p{margin:0;color:var(--muted);font-size:12px;max-width:560px}
+.market-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.market-card{all:unset;box-sizing:border-box;cursor:pointer;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.market-card:hover{border-color:#cbbf9f;box-shadow:0 8px 22px #0000000d}
+.market-card:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.market-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.market-top strong{font-size:15px}
+.market-top small{display:block;color:var(--muted);font-size:12px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}
+.type-badge{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#a28a61;border:1px solid #e3d8c2;border-radius:20px;padding:2px 8px;white-space:nowrap}
+.market-bottom{display:flex;justify-content:space-between;font-size:14px}
+.spark{width:100%;height:48px;display:block}
+.spark.empty{height:48px}
+.spark polyline{fill:none;stroke-width:1.8;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.spark-up{stroke:var(--green)}
+.spark-down{stroke:var(--red)}
+.spark-base{stroke:#c9c4ba;stroke-dasharray:3 3;stroke-width:1;vector-effect:non-scaling-stroke}
+
+/* devil's advocate search */
+.advocate-search{max-width:none}
+.searchform.compact{height:auto;padding:0 14px;border-radius:11px}
+.searchform.compact input{height:48px;font-size:15px}
+.suggestion.muted-row{cursor:default;background:#faf9f6}
+.field .searchform.compact input{border:0;padding:0;height:48px;background:transparent}
+.searchform.compact:focus-within{border-color:var(--gold)}

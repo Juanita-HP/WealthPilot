@@ -210,6 +210,7 @@ function FactorTable({ score, labels }) {
 
 export default function Research({ symbol }) {
   const ticker = symbol.toUpperCase();
+  const isCurrency = ticker.endsWith("=X");
   const quote = useQuote(ticker);
   const [ins, setIns] = useState(null);
   const [insError, setInsError] = useState("");
@@ -219,11 +220,12 @@ export default function Research({ symbol }) {
   const [saved, setSaved] = useState(getWatchlist().some(i => i.symbol === ticker));
 
   useEffect(() => {
+    if (isCurrency) return undefined;  // a currency pair is market context, not a holding: no profile scores, no news
     let alive = true;
     api(`/stocks/${encodeURIComponent(ticker)}/insights`).then(r => alive && setIns(r)).catch(e => alive && setInsError(e.message));
     api(`/stocks/${encodeURIComponent(ticker)}/news`).then(r => alive && setNewsData(r)).catch(() => alive && setNewsData({ available: false, note: "News unavailable right now." }));
     return () => { alive = false; };
-  }, [ticker]);
+  }, [ticker, isCurrency]);
 
   const name = quote.name || ins?.name || ticker;
   const toggleStar = () => {
@@ -272,6 +274,19 @@ export default function Research({ symbol }) {
         </aside>
       </div>
 
+      {isCurrency ? (
+        <section className="analysis-card">
+          <div className="eyebrow">CURRENCY</div>
+          <h2>Market context, not a holding</h2>
+          <p className="analysis-status" style={{ marginTop: 0 }}>
+            An exchange rate is not an investment in your plan, so it has no profile fit or growth score. It matters
+            because part of your plan is in U.S. dollars and foreign stocks: when the Canadian dollar falls, their value
+            in CAD rises, and the other way around. Your plan page shows how much of your money is exposed to foreign currencies.
+          </p>
+          <button type="button" className="inline-link" onClick={() => go("plan")}>Open my plan</button>
+        </section>
+      ) : (
+        <>
       <section className="analysis-card">
         <div className="analysis-head">
           <div>
@@ -412,6 +427,8 @@ export default function Research({ symbol }) {
         </div>
       </section>
 
+        </>
+      )}
       {quote.error && <div className="page-error">{quote.error}</div>}
       <div className="source-box">
         <strong>Data sources & limitations</strong>
