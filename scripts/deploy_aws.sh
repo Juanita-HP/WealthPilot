@@ -8,7 +8,8 @@
 # Re-running it updates the same stack and keeps the same website address.
 #
 # Optional environment variables: DATA_BUCKET (S3 bucket with the starter data), DATA_PREFIX (default wealthpilot),
-# STACK_NAME (default wealthpilot-web), TRACE_TABLE (default wealthpilot-traces).
+# STACK_NAME (default wealthpilot-web), TRACE_TABLE (default wealthpilot-traces), FORCE_GIT_MODELS=1 (replace models
+# published from SageMaker with the ones in git).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -46,8 +47,14 @@ for f in assets_universe.csv prices_daily.csv corporate_actions.csv fx_usdcad_da
   fi
 done
 # Files that are in git (models, macro history, international fund list): keep the bucket in step with the code.
+# Models published from a SageMaker training job (scripts/promote_models.sh) are kept unless FORCE_GIT_MODELS=1.
 for rel in models/inflation_model.json models/asset_forecast.json models/timing_model.json; do
-  aws s3 cp --only-show-errors "$rel" "s3://$DATA_BUCKET/$PREFIX/$rel"
+  promoted="$(aws s3api head-object --bucket "$DATA_BUCKET" --key "$PREFIX/$rel" --query 'Metadata."promoted-from"' --output text 2>/dev/null || true)"
+  if [ -n "$promoted" ] && [ "$promoted" != "None" ] && [ "${FORCE_GIT_MODELS:-0}" != "1" ]; then
+    echo "kept $rel (published from SageMaker job $promoted)"
+  else
+    aws s3 cp --only-show-errors "$rel" "s3://$DATA_BUCKET/$PREFIX/$rel"
+  fi
 done
 for f in macro_history.csv assets_universe_extra.csv; do
   aws s3 cp --only-show-errors "data/external/$f" "s3://$DATA_BUCKET/$PREFIX/external/$f"

@@ -72,7 +72,9 @@ Create a (fictional) account, then answer the questionnaire, one question per pa
 
 The website runs on AWS: CloudFront serves the React build from S3 and sends `/api/*` to the FastAPI app on Lambda
 (accounts in DynamoDB, agents on Amazon Bedrock). Deploy or update it from AWS CloudShell with
-`bash scripts/deploy_aws.sh`; no access keys are needed (see `docs/aws.md`).
+`bash scripts/deploy_aws.sh`; no access keys are needed (see `docs/aws.md`). The models are retrained monthly in
+Amazon SageMaker training jobs (`bash scripts/train_aws.sh`); a new model reaches the site only after
+`scripts/promote_models.sh` and a confirmation.
 
 ### Core modules
 
