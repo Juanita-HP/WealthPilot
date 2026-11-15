@@ -41,6 +41,7 @@ python scripts/fetch_macro_history.py   # macro history since 1995
 python scripts/fetch_international.py   # international stock funds (XEF.TO, XEC.TO) for the global split
 python scripts/fetch_long_history.py    # long price history of gold and crypto (forecast model)
 python scripts/train_asset_forecast.py  # crypto and gold forecast, tested out of sample (models/model_card_asset_forecast.md)
+python scripts/fetch_timing_history.py && python scripts/train_timing.py  # ML market-timing check (models/model_card_timing.md)
 python scripts/train_inflation.py        # inflation model + model card
 pytest
 ```
@@ -65,7 +66,7 @@ uvicorn wealthpilot.api:app --reload --port 8000
 cd web && npm run dev
 ```
 
-Create a (fictional) account, then answer the questionnaire, one question per page, with amounts in dollars (work situation, income and spending, assets and debts, goals with their horizons, comfort with risk, experience, themes and preferences, summary); the profile is saved and reloaded at the next login. Pages: stock research (search with suggestions, price chart, fundamentals, and two gauges: fit with your profile and unbiased measured growth, with the explanation behind each), watchlist, my plan (one sub-portfolio per goal, official news mapped to the portfolio, six risks), time machine, devil's advocate (plus the Claude agents), strategy lab, profile. The browser cannot call Yahoo Finance directly (CORS), so the API relays the market-data requests of the stock page. Demo personas (Amira, Mateo, Robert) prefill the onboarding. Accounts are stored locally (`data/users/`, git-ignored) with salted PBKDF2 hashes; Amazon Cognito would replace this in a deployment. The agents need `WEALTHPILOT_LLM=bedrock` (AWS credentials) or `WEALTHPILOT_LLM=anthropic`.
+Create a (fictional) account, then answer the questionnaire, one question per page, with amounts in dollars (work situation, income and spending, assets and debts, goals with their horizons, comfort with risk, experience, themes and preferences, summary); the profile is saved and reloaded at the next login. Pages: stock research (search with suggestions, price chart, fundamentals, and two gauges: fit with your profile and unbiased measured growth, with the explanation behind each), watchlist, my plan (one sub-portfolio per goal, official news mapped to the portfolio, six risks), time machine, devil's advocate (plus the Claude agents, the ML market-timing check and, for experienced investors, the trading-rule tester), profile. The browser cannot call Yahoo Finance directly (CORS), so the API relays the market-data requests of the stock page. Demo personas (Amira, Mateo, Robert) prefill the onboarding. Accounts are stored locally (`data/users/`, git-ignored) with salted PBKDF2 hashes; Amazon Cognito would replace this in a deployment. The agents need `WEALTHPILOT_LLM=bedrock` (AWS credentials) or `WEALTHPILOT_LLM=anthropic`.
 
 ### Core modules
 
@@ -80,6 +81,7 @@ Create a (fictional) account, then answer the questionnaire, one question per pa
 | `wealthpilot/ticker.py` | Ticker dashboard backend: overview with provenance for every number, chart series per timeframe, growth score (from financial statements) and profile-fit score, each with its factor breakdown. Sources: `YFinanceSource` (live, cached) or `StarterSource` (offline) |
 | `wealthpilot/strategist.py`, `time_machine.py`, `validation.py` | Policy allocation with a reason per weight; replay in the investor's dollars and hypothetical shocks; out-of-sample validation |
 | `wealthpilot/inflation.py` | Canadian CPI forecaster validated walk-forward (see `docs/model_card_inflation.md`) |
+| `wealthpilot/timing.py` | Market-timing check: the team's ML entry model (logistic regression on technical indicators and the VIX), tested year by year with realistic broker costs and a threshold chosen on training data only; used by the devil's advocate |
 | `wealthpilot/lab.py` | Strategy lab adapted from nicho-spekt/backtesting-engine, always against buy-and-hold and out of sample |
 | `wealthpilot/advocate.py` | Devil's advocate: evidence-based challenges with honest counterpoints |
 | `wealthpilot/macro_news.py`, `wealthpilot/webtext.py` | Global news read in full from official sources (Bank of Canada, Federal Reserve, Statistics Canada) with BeautifulSoup where robots.txt allows AI agents: decision and quotes, risk factors, share of the investor's portfolio exposed, past similar events, matching stress test; checked against official series (`scripts/eval_macro.py`, `docs/macro_eval.md`) |

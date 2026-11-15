@@ -7,6 +7,20 @@ const cell = (k, v) => v == null ? "—" : ["trades"].includes(k) ? v : k === "s
   : k === "costs_paid" ? "$" + Math.round(v).toLocaleString("en-CA") : signedPct(v);
 
 export default function Lab() {
+  return (
+    <section className="page">
+      <div className="page-heading">
+        <div className="eyebrow">STRATEGY LAB</div>
+        <h1>Test a trading rule, honestly.</h1>
+        <p>The rule is tuned on the first 70% of the history, then tested on the rest, which it has never seen, against simply holding. The lab answers "what would have happened?", never "buy now".</p>
+      </div>
+      <LabPanel />
+    </section>
+  );
+}
+
+// The rule tester itself, also embedded in the devil's advocate page for experienced investors.
+export function LabPanel() {
   const [universe, setUniverse] = useState([]);
   const [strategies, setStrategies] = useState([]);
   const [symbol, setSymbol] = useState("TSLA");
@@ -29,12 +43,7 @@ export default function Lab() {
 
   const desc = strategies.find(s => s.value === strategy)?.description;
   return (
-    <section className="page">
-      <div className="page-heading">
-        <div className="eyebrow">STRATEGY LAB</div>
-        <h1>Test a trading rule, honestly.</h1>
-        <p>The rule is tuned on the first 70% of the history, then tested on the rest, which it has never seen, against simply holding. The lab answers "what would have happened?", never "buy now".</p>
-      </div>
+    <>
       <div className="question-card" style={{ marginTop: 0 }}>
         <div className="form-grid">
           <div className="field"><label>Stock or fund</label>
@@ -73,6 +82,6 @@ export default function Lab() {
           </details>
         </div>
       )}
-    </section>
+    </>
   );
 }

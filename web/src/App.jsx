@@ -19,7 +19,7 @@ function parseRoute() {
 
 
 const NAV = [["stocks", "Stocks"], ["watchlist", "Watchlist"], ["plan", "My plan"], ["time-machine", "Time machine"],
-             ["advocate", "Devil's advocate"], ["lab", "Lab"]];
+             ["advocate", "Devil's advocate"]];
 
 export default function App() {
   const [route, setRoute] = useState(parseRoute());
