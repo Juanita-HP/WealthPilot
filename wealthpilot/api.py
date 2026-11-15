@@ -267,6 +267,7 @@ CHALLENGE_TITLE = {"SINGLE_SECURITY": "Too large for a single stock", "EQUITY_AB
                    "NEWS_EXPOSURE": "Dependence on a topic in the news",
                    "RECENT_NEWS": "Recent news: read with a grain of salt",
                    "ESG_CONTROVERSY": "ESG or controversy signal in recent news",
+                   "ALREADY_OWNED": "You already own it through your index funds",
                    "GOLD_ABOVE_LIMIT": "Too much gold",
                    "EQUITY_BELOW_RANGE": "Few stocks for your level"}
 VERDICT = {"reconsider": ("red", "Reconsider"), "proceed with care": ("yellow", "Proceed with care"),
@@ -1017,7 +1018,11 @@ def ask(q: Question, user: str = Depends(current_user)):
             for k, v in sorted(sess.portfolio.items(), key=lambda x: -x[1])
         ],
     }))
-    ans = run(sess, q.question, from_env(), debate=False)
+    try:
+        ans = run(sess, q.question, from_env(), debate=False)
+    except Exception as e:  # missing AWS credentials, no model access, network: say so instead of a 500
+        raise HTTPException(503, f"The agents could not answer ({type(e).__name__}: {str(e)[:200]}). Check the AWS "
+                                 "credentials and Bedrock model access, or set WEALTHPILOT_LLM=anthropic with an API key.")
     raw_receipts = [x.to_dict() for x in sess.ledger.receipts]
     receipts = [_summarize_receipt(x) for x in raw_receipts]
     aws_trace_id = None
@@ -1067,11 +1072,22 @@ def spa(path: str):
     return FileResponse(WEB_DIST / "index.html")
 
 
+def _aws_credentials() -> bool:
+    try:
+        import boto3
+        return boto3.Session().get_credentials() is not None
+    except Exception:
+        return False
+
+
 def main() -> None:
     import uvicorn
-    os.environ.setdefault("WEALTHPILOT_LLM", "bedrock")
-    os.environ.setdefault("AWS_REGION", "us-east-1")
-    os.environ.setdefault("TRACE_TABLE", "wealthpilot-traces")
+    # Use Claude on Amazon Bedrock by default when AWS credentials are configured on this machine; otherwise the
+    # agents stay off and the interface says how to turn them on (the rest of the app works without them).
+    if not os.environ.get("WEALTHPILOT_LLM") and _aws_credentials():
+        os.environ["WEALTHPILOT_LLM"] = "bedrock"
+        os.environ.setdefault("AWS_REGION", "us-east-1")
+        os.environ.setdefault("TRACE_TABLE", "wealthpilot-traces")
     uvicorn.run("wealthpilot.api:app", host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", 8000)))
 
 
