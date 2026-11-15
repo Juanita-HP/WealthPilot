@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { PALETTE, api, dollars, longDate, pct, signedPct, go } from "../lib.js";
 import { Donut } from "../components/Charts.jsx";
+import { LabPanel } from "./Lab.jsx";
 
 const VERDICT = { clear: "clear difference", unclear: "no clear effect", too_few: "too few cases" };
 const PUBLISHER = { "Bank of Canada": "Bank of Canada", "Federal Reserve": "U.S. Federal Reserve", "Statistics Canada": "Statistics Canada" };
@@ -155,6 +156,92 @@ function InflationCard({ c }) {
   );
 }
 
+const ym = s => new Date(s + "T12:00:00").toLocaleDateString("en-CA", { year: "numeric", month: "long" });
+
+// The investor's question, answered with the team's ML timing model as one of the contenders.
+function EntryCard({ e }) {
+  const ways = [
+    { key: "now", title: "Invest it all now", avg: e.now.average_value },
+    { key: "spread", title: `Spread it over ${e.spread_months} months`, avg: e.spread.average_value, s: e.spread },
+    { key: "signal", title: "Wait for our model's signal", avg: e.signal.average_value, s: e.signal },
+  ];
+  const best = ways.reduce((a, b) => (b.avg > a.avg ? b : a));
+  const funds = Object.entries(e.funds).map(([t, f]) => `${t} ${dollars(f.amount)}`).join(", ");
+  const experienced = ["intermediate", "advanced"].includes(e.experience);
+  return (
+    <div className="card entry-card">
+      <div className="kicker">Getting your money invested</div>
+      <h3>Invest now, spread it out, or wait for a good moment?</h3>
+      <p className="muted small" style={{ marginTop: 6 }}>
+        Your {dollars(e.invested)} going into stock funds ({funds}). We replayed all {e.starts} months from {ym(e.period.slice(0, 7) + "-01")} to {ym(e.period.slice(-7) + "-01")}:
+        each way, started that month and valued {e.horizon_months} months later, with real costs.
+      </p>
+      <div className="entry-ways">
+        {ways.map(w => (
+          <div key={w.key} className={"entry-way" + (w.key === best.key ? " best" : "")}>
+            {w.key === best.key && <span className="entry-badge">Best on average</span>}
+            <div className="entry-title">{w.title}</div>
+            <div className="entry-value">{dollars(w.avg)}</div>
+            <div className="small muted">average value after {e.horizon_months} months</div>
+            {w.key === "now" ? (
+              <p className="small">Ended below what you put in for {pct(e.now.loss_share)} of the start months; worst case {dollars(e.now.worst_value)} (started {ym(e.now.worst_start)}).</p>
+            ) : (
+              <p className="small">
+                Beat investing now in <b>{pct(w.s.beats_now_share)}</b> of the months, and ended {dollars(Math.abs(w.s.average_gap))}
+                {w.s.average_gap >= 0 ? " higher" : " lower"} on average.
+                {w.key === "signal" ? ` Typical wait before investing: ${Math.round(e.signal_median_wait_days)} days.` : ` When investing now started badly, it saved up to ${dollars(w.s.best_gap)}.`}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="entry-verdict">
+        {best.key === "now"
+          ? `Investing right away came out ahead most of the time: markets rise more often than they fall, so money waiting in cash usually misses gains. Spreading it out mainly buys peace of mind: it softens a bad start, at the cost of some return.`
+          : best.key === "spread"
+            ? `Spreading the money out came out ahead on average over this period.`
+            : `Waiting for the model's signal came out ahead on average over this period; check how often it did before relying on it.`}
+        {" "}Our machine-learning signal beat investing now in {pct(e.signal.beats_now_share)} of the months
+        {e.signal.beats_now_share < 0.5 ? ": not reliably." : `, by ${dollars(Math.abs(e.signal.average_gap))} on average${e.signal.average_gap < 0 ? " less" : ""}: check the details before relying on it.`}
+      </p>
+      <details className="more">
+        <summary>How we tested it</summary>
+        <div className="inner">
+          <p>
+            <b>The signal</b> is the team's machine-learning model from our backtesting engine: a logistic regression on about thirty
+            technical indicators and the VIX that estimates the chance of a 2% rise within 5 days. Each year it is retrained on earlier
+            years only and its threshold is chosen on that past, so every signal here is one it could have given at the time.
+          </p>
+          <p>
+            <b>Costs:</b> {(e.cost_per_purchase * 100).toFixed(2)}% per purchase ($0 commission at Wealthsimple or Questrade, plus the
+            bid-ask spread). <b>Cash waiting</b> earns the policy rate (Bank of Canada or Federal Reserve). Without a signal within
+            {" "}{e.max_wait_months} months, the money is invested anyway. Past results do not predict future returns.
+          </p>
+          <p><b>As a trading rule</b> (in and out every 5 days), the same model after costs:</p>
+          <table className="data">
+            <thead><tr><th>Fund</th><th className="num">Years it beat holding</th><th className="num">Total, model</th><th className="num">Total, holding</th><th className="num">Skill (AUC)</th></tr></thead>
+            <tbody>{Object.entries(e.tested).map(([t, a]) => (
+              <tr key={t}><td>{t}</td><td className="num">{a.wins_sharpe} of {a.tests}</td><td className="num">{pct(a.strategy_compounded)}</td>
+                <td className="num">{pct(a.hold_compounded)}</td><td className="num">{a.mean_auc?.toFixed(2)}</td></tr>))}
+            </tbody>
+          </table>
+          <p className="muted small">
+            It reads short-term moves a little better than chance (AUC above 0.5), but not enough to beat staying invested. It would be
+            shown as a live signal only if it beat holding in at least {pct(e.gate.win_share_sharpe)} of the years with a significant
+            gap (p &lt; {e.gate.p_value}); no fund passes. Full results: models/model_card_timing.md ({e.trained_on}).
+          </p>
+        </div>
+      </details>
+      {experienced && (
+        <details className="more">
+          <summary>Try a trading rule yourself</summary>
+          <div className="inner"><LabPanel /></div>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export default function Plan() {
   const [plan, setPlan] = useState(null);
   const [news, setNews] = useState(null);
@@ -183,6 +270,13 @@ export default function Plan() {
       {plan.notes.map(n => <div className="pill yellow" key={n}>{n}</div>)}
 
       <div className="grid cols-3">{plan.goals.map(g => <GoalCard key={g.name} g={g} />)}</div>
+
+      {plan.entry && (
+        <>
+          <h2 className="section-title">Getting your money invested</h2>
+          <EntryCard e={plan.entry} />
+        </>
+      )}
 
       {plan.inflation && (
         <>

@@ -207,6 +207,16 @@ def t_inflation(s: Session, horizon_months: int):
     return infl.forecast(s.macro_history, s.inflation_artifact, horizon_months).to_dict()
 
 
+def t_invest_now_or_wait(s: Session):
+    from .. import timing
+    if not s.portfolio:
+        raise ValueError("No portfolio. Call propose_allocation or plan_goals first.")
+    out = timing.entry_summary(s.portfolio, s.amount)
+    if out is None:
+        raise ValueError("Entry study unavailable (models/timing_model.json missing or no tested stock fund in the portfolio).")
+    return out
+
+
 def t_set_portfolio(s: Session, weights: list[dict]):
     w = _weights(weights)
     portfolio.validate_weights(w, s.prices_cad.columns)
@@ -315,6 +325,12 @@ TOOLS = [
          "Test a trading rule on one ticker: optimized on 70% of history, tested on the rest, against buy-and-hold.",
          _obj({"symbol": {"type": "string"}, "strategy": {"type": "string", "enum": list(lab.STRATEGIES)}}),
          t_lab, frozenset({"advisor", "advocate"})),
+    Tool("invest_now_or_wait",
+         "For the investor's money in the tested stock funds of the current portfolio: value after 12 months when "
+         "investing right away, spreading purchases over 6 months, or waiting for the team's ML timing signal, over "
+         "every start month since 2010 (out-of-sample signal, real costs, cash earning the policy rate). Use it when "
+         "the investor asks whether to invest now, gradually, or wait for a better moment.",
+         _obj({}), t_invest_now_or_wait, frozenset({"advisor", "advocate"})),
     Tool("inflation_forecast",
          "Canadian CPI inflation forecast with 80% interval, using the method that won walk-forward tests.",
          _obj({"horizon_months": {"type": "integer", "enum": list(infl.HORIZONS)}}), t_inflation,

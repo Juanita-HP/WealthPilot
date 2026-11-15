@@ -239,7 +239,7 @@ CHALLENGE_TITLE = {"SINGLE_SECURITY": "Too large for a single stock", "EQUITY_AB
                    "NEWS_EXPOSURE": "Dependence on a topic in the news",
                    "RECENT_NEWS": "Recent news: read with a grain of salt",
                    "ESG_CONTROVERSY": "ESG or controversy signal in recent news",
-                   "MARKET_TIMING": "Timing the entry: what our ML model found", "GOLD_ABOVE_LIMIT": "Too much gold",
+                   "GOLD_ABOVE_LIMIT": "Too much gold",
                    "EQUITY_BELOW_RANGE": "Few stocks for your level"}
 VERDICT = {"reconsider": ("red", "Reconsider"), "proceed with care": ("yellow", "Proceed with care"),
            "no major objection": ("green", "No major objection")}
@@ -491,7 +491,11 @@ def plan(user: str = Depends(current_user)):
     rm = risks.risk_map(st["weights"], u, m["px_cad"], m["dollar_vol"], expected_nominal=profile.expected["net"])
     card = pf.level_card(profile.level)
     fin = st["onboarding"].financials
-    return {"inflation": inflation_card(12),
+    from . import timing
+    entry = timing.entry_summary(st["weights"], p.total_amount)
+    if entry:
+        entry["experience"] = profile.experience
+    return {"inflation": inflation_card(12), "entry": jsonable(entry),
             "level": profile.level, "name": card["name"], "score_10": card["score_10"], "total": p.total_amount,
             "available": fin.cash_savings + fin.investments,
             "goals": goals, "notes": p.notes,
@@ -676,26 +680,6 @@ def devils_advocate(req: TradeRequest, user: str = Depends(current_user)):
                                      "claim": c.claim, "counterpoint": c.counterpoint, "question": c.question}
                                     for c in rv.challenges],
                      "before_after": rv.before_after})
-
-
-@app.get("/api/timing")
-def timing_summary(user: str = Depends(current_user)):
-    """Results of the market-timing check, per asset and cost scenario, for the devil's advocate page."""
-    from . import timing
-    art = timing.load_artifact()
-    if not art:
-        return {"available": False}
-    rows = []
-    for t, a in art["assets"].items():
-        s = a["scenarios"]["main"]["summary"]
-        rows.append({"ticker": t, "name": a["name"], "tests": s["tests"], "years": s["years"],
-                     "wins_sharpe": s["wins_sharpe"], "wins_return": s["wins_return"],
-                     "model_compounded": s["strategy_compounded"], "hold_compounded": s["hold_compounded"],
-                     "auc": s["mean_auc"], "p_value": s["p_value"], "usable": a["usable"],
-                     "original_zero_costs": a["original_protocol"]["zero_costs"]["beats_on_return"]})
-    return jsonable({"available": True, "trained_on": art["trained_on"], "source": art["source"],
-                     "costs": art["costs"], "gate": art["gate"], "assets": rows,
-                     "experience": user_state(user)["profile"].experience})
 
 
 class LabRequest(BaseModel):

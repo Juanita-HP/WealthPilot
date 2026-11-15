@@ -120,7 +120,7 @@ def features(df: pd.DataFrame, vix: pd.Series) -> pd.DataFrame:
     f["BB_distance_middle"] = c / mid - 1
     f["BB_bandwidth_change"] = f["BB_bandwidth"].pct_change()
     f["BB_signal"] = _hold(c < lower, c > mid)
-    hi20, lo20 = h.rolling(20).max().shift(1), lo.rolling(20).min().shift(1)
+    hi20, lo20 = c.rolling(20).max().shift(1), c.rolling(20).min().shift(1)   # closes, as in the engine
     f["Breakout_distance_high"], f["Breakout_distance_low"] = c / hi20 - 1, c / lo20 - 1
     f["Breakout_channel_width"] = (hi20 - lo20) / c
     f["Breakout_signal"] = _hold(c > hi20, c < lo20)
@@ -205,8 +205,12 @@ def _fit(df: pd.DataFrame):
     return make_model().fit(train[FEATURES], train["target"].astype(int))
 
 
-def walk_forward(feat: pd.DataFrame, cost: float, first_year: int = FIRST_TEST_YEAR) -> pd.DataFrame:
-    """One test per calendar year; threshold chosen inside the training window only."""
+def walk_forward(feat: pd.DataFrame, cost: float, first_year: int = FIRST_TEST_YEAR,
+                 collect: list | None = None) -> pd.DataFrame:
+    """One test per calendar year; threshold chosen inside the training window only.
+
+    ``collect``, if given, receives each year's out-of-sample probabilities and threshold (used by the entry study).
+    """
     from sklearn.metrics import roc_auc_score
     rows = []
     years = sorted(y for y in feat.index.year.unique() if y >= first_year)
@@ -222,6 +226,8 @@ def walk_forward(feat: pd.DataFrame, cost: float, first_year: int = FIRST_TEST_Y
                                inner_val["ret_next"].to_numpy(), cost)
         model = _fit(train)
         prob = model.predict_proba(test[FEATURES])[:, 1]
+        if collect is not None:
+            collect.append(pd.DataFrame({"prob": prob, "threshold": thr}, index=test.index))
         pos = positions(prob, thr)
         rn = test["ret_next"].to_numpy()
         strat, hold = stats(backtest(pos, rn, cost), pos), stats(hold_returns(rn, cost))
@@ -290,6 +296,99 @@ def latest_signal(feat: pd.DataFrame, cost: float) -> dict:
             "base_rate": float(train["target"].mean())}
 
 
+# ----------------------------------------------------------------------------- the investor's question
+
+ENTRY_HORIZON_MONTHS = 12   # compare the three ways after one year
+SPREAD_MONTHS = 6           # "spread it out": six equal monthly purchases
+MAX_WAIT_MONTHS = 6         # "wait for the signal": invest anyway after six months without a signal
+
+
+def cash_index(index: pd.DatetimeIndex, ticker: str) -> pd.Series:
+    """Growth of cash waiting to be invested: policy rate of the asset's currency (BoC overnight or Fed upper bound)."""
+    sid = "V39079" if ticker.endswith(".TO") else "DFEDTARU"
+    try:
+        rate = data.load_macro_history(sid, point_in_time=False).dropna()
+        rate = rate.reindex(rate.index.union(index)).ffill().bfill().reindex(index)
+    except (FileNotFoundError, KeyError):
+        rate = pd.Series(0.0, index=index)
+    return ((1 + rate / 100) ** (1 / 252)).cumprod()
+
+
+def entry_study(close: pd.Series, oos: pd.DataFrame, cash: pd.Series, cost: float) -> dict:
+    """For each month since the first out-of-sample year: $1 invested in three ways, value 12 months later.
+
+    * now: everything at that day's close;
+    * spread: one sixth at the first trading day of each of the next six months, cash earning the policy rate;
+    * signal: cash until the model's out-of-sample probability passes its threshold, bought at the next day's close
+      (same one-day delay as the backtest), or after six months if no signal came.
+    Every purchase pays ``cost``. Only probabilities from models trained on earlier years are used.
+    """
+    idx = oos.index
+    px, cx = close.reindex(idx).to_numpy(), cash.reindex(idx).to_numpy()
+    prob, thr = oos["prob"].to_numpy(), oos["threshold"].to_numpy()
+    months = pd.Series(idx, index=idx).groupby([idx.year, idx.month]).first()
+    out = {"starts": [], "now": [], "spread": [], "signal": [], "waited_days": []}
+    for start in months:
+        end_date = start + pd.DateOffset(months=ENTRY_HORIZON_MONTHS)
+        if end_date > idx[-1]:
+            break
+        i0, i_end = idx.get_loc(start), idx.searchsorted(end_date, side="right") - 1
+        grow = lambda i: (1 - cost) * px[i_end] / px[i] * 1.0  # noqa: E731
+        carry = lambda i: cx[i] / cx[i0]  # noqa: E731
+        now = grow(i0)
+        tranche_days = [idx.searchsorted(start + pd.DateOffset(months=k)) for k in range(SPREAD_MONTHS)]
+        spread = sum(carry(i) * grow(i) for i in tranche_days) / SPREAD_MONTHS
+        deadline = idx.searchsorted(start + pd.DateOffset(months=MAX_WAIT_MONTHS))
+        hits = [j for j in range(i0, deadline) if prob[j] >= thr[j]]
+        buy = min(hits[0] + 1, i_end) if hits else min(deadline, i_end)
+        out["starts"].append(str(start.date()))
+        out["now"].append(round(float(now), 6))
+        out["spread"].append(round(float(spread), 6))
+        out["signal"].append(round(float(carry(buy) * grow(buy)), 6))
+        out["waited_days"].append(int((idx[buy] - start).days))
+    return out
+
+
+def entry_summary(weights: dict[str, float], total: float, artifact: dict | None = None) -> dict | None:
+    """The three ways applied to the investor's own money in the tested stock funds of their plan."""
+    art = artifact if artifact is not None else load_artifact()
+    if not art:
+        return None
+    studies = {t: a["entry"] for t, a in art["assets"].items() if "entry" in a and weights.get(t, 0) > 0}
+    amounts = {t: weights[t] * total for t in studies}
+    invested = sum(amounts.values())
+    if invested < 100:
+        return None
+    # Match funds by month: the first trading day of a month can differ between the TSX and U.S. exchanges.
+    starts = sorted(set.intersection(*({d[:7] for d in s["starts"]} for s in studies.values())))
+    if not starts:
+        return None
+    pos = {t: {d[:7]: i for i, d in enumerate(s["starts"])} for t, s in studies.items()}
+    way = lambda k: np.array([sum(amounts[t] * studies[t][k][pos[t][d]] for t in studies) for d in starts])  # noqa: E731
+    now, spread, signal = way("now"), way("spread"), way("signal")
+    waited = np.array([max(studies[t]["waited_days"][pos[t][d]] for t in studies) for d in starts])
+    worst = int(np.argmin(now))
+
+    def side(v):
+        gap = v - now
+        return {"average_value": float(v.mean()), "beats_now_share": float((gap > 0).mean()),
+                "average_gap": float(gap.mean()), "median_gap": float(np.median(gap)),
+                "worst_gap": float(gap.min()), "best_gap": float(gap.max())}
+    tested = {t: {"name": a["name"], **{k: a["scenarios"]["main"]["summary"][k]
+                                        for k in ("tests", "years", "wins_sharpe", "strategy_compounded",
+                                                  "hold_compounded", "mean_auc", "p_value", "usable")}}
+              for t, a in art["assets"].items()}
+    return {"funds": {t: {"amount": amounts[t], "name": art["assets"][t]["name"]} for t in studies},
+            "invested": invested, "starts": len(starts), "period": f"{starts[0][:7]} to {starts[-1][:7]}",
+            "horizon_months": ENTRY_HORIZON_MONTHS, "spread_months": SPREAD_MONTHS, "max_wait_months": MAX_WAIT_MONTHS,
+            "now": {"average_value": float(now.mean()), "worst_value": float(now.min()), "worst_start": starts[worst] + "-01",
+                    "loss_share": float((now < invested).mean())},
+            "spread": side(spread), "signal": side(signal),
+            "signal_median_wait_days": float(np.median(waited)),
+            "cost_per_purchase": art["costs"]["main"]["per_side"], "trained_on": art["trained_on"],
+            "source": art["source"], "tested": tested, "gate": art["gate"]}
+
+
 def train(prices: pd.DataFrame | None = None) -> dict:
     prices = prices if prices is not None else load_prices()
     vix = ohlcv(prices, VIX)["Close"]
@@ -304,7 +403,12 @@ def train(prices: pd.DataFrame | None = None) -> dict:
         for scen, cost in COSTS.items():
             if scen == "fx_cad_account" and t.endswith(".TO"):
                 continue                                      # CAD-listed: no currency conversion
-            folds = walk_forward(feat, cost)
+            collected = [] if scen == "main" else None
+            folds = walk_forward(feat, cost, collect=collected)
+            if collected:
+                oos = pd.concat(collected)
+                close = ohlcv(prices, t)["Close"]
+                res["entry"] = entry_study(close, oos, cash_index(oos.index, t), cost)
             res["scenarios"][scen] = {"summary": summarize(folds), "folds": folds.round(5).to_dict(orient="records")}
         res["original_protocol"] = {"zero_costs": original_split(feat, 0.0), "main_costs": original_split(feat, COSTS["main"])}
         main = res["scenarios"]["main"]["summary"]

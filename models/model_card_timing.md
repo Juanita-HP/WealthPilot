@@ -30,17 +30,17 @@ What changes here, so that the result can be trusted
 
 | Asset | Costs | Tests | Beats holding (Sharpe) | Beats holding (return) | Mean Sharpe gap | p-value | Compounded: model vs holding | Usable |
 |---|---|---|---|---|---|---|---|---|
-| QQQ | 0.00% per side | 17 (2010-2026) | 6/17 | 5/17 | -0.56 | 1.00 | 140% vs 1512% | no |
-| QQQ | 0.05% per side | 17 (2010-2026) | 6/17 | 4/17 | -0.60 | 1.00 | 112% vs 1485% | no |
-| QQQ | 1.55% per side | 17 (2010-2026) | 3/17 | 3/17 | -0.90 | 1.00 | -28% vs 847% | no |
-| VGT | 0.00% per side | 17 (2010-2026) | 4/17 | 3/17 | -0.47 | 0.98 | 417% vs 1701% | no |
-| VGT | 0.05% per side | 17 (2010-2026) | 7/17 | 6/17 | -0.50 | 0.98 | 371% vs 1671% | no |
-| VGT | 1.55% per side | 17 (2010-2026) | 7/17 | 7/17 | -0.38 | 0.99 | 309% vs 958% | no |
-| SPY | 0.00% per side | 17 (2010-2026) | 7/17 | 5/17 | -0.20 | 0.89 | 188% vs 764% | no |
-| SPY | 0.05% per side | 17 (2010-2026) | 7/17 | 5/17 | -0.24 | 0.93 | 173% vs 750% | no |
-| SPY | 1.55% per side | 17 (2010-2026) | 1/17 | 1/17 | -1.58 | 1.00 | -84% vs 408% | no |
-| XIU.TO | 0.00% per side | 17 (2010-2026) | 9/17 | 9/17 | -0.34 | 0.99 | 102% vs 363% | no |
-| XIU.TO | 0.05% per side | 17 (2010-2026) | 8/17 | 7/17 | -0.38 | 0.99 | 88% vs 355% | no |
+| QQQ | 0.00% per side | 17 (2010-2026) | 6/17 | 4/17 | -0.73 | 0.99 | 125% vs 1512% | no |
+| QQQ | 0.05% per side | 17 (2010-2026) | 6/17 | 4/17 | -0.76 | 0.99 | 103% vs 1485% | no |
+| QQQ | 1.55% per side | 17 (2010-2026) | 3/17 | 3/17 | -0.74 | 1.00 | 44% vs 847% | no |
+| VGT | 0.00% per side | 17 (2010-2026) | 3/17 | 3/17 | -0.47 | 1.00 | 256% vs 1701% | no |
+| VGT | 0.05% per side | 17 (2010-2026) | 5/17 | 5/17 | -0.51 | 1.00 | 228% vs 1671% | no |
+| VGT | 1.55% per side | 17 (2010-2026) | 6/17 | 6/17 | -0.48 | 0.99 | 212% vs 958% | no |
+| SPY | 0.00% per side | 17 (2010-2026) | 6/17 | 4/17 | -0.38 | 0.97 | 151% vs 764% | no |
+| SPY | 0.05% per side | 17 (2010-2026) | 6/17 | 4/17 | -0.39 | 0.97 | 140% vs 750% | no |
+| SPY | 1.55% per side | 17 (2010-2026) | 2/17 | 2/17 | -1.76 | 1.00 | -88% vs 408% | no |
+| XIU.TO | 0.00% per side | 17 (2010-2026) | 7/17 | 7/17 | -0.34 | 0.90 | 83% vs 363% | no |
+| XIU.TO | 0.05% per side | 17 (2010-2026) | 7/17 | 7/17 | -0.37 | 0.92 | 72% vs 355% | no |
 
 ## Original protocol (5 equal chunks, 4 validation folds), threshold chosen inside each training window
 
@@ -51,9 +51,24 @@ What changes here, so that the result can be trusted
 | VGT | none | 0/4 | 0/4 |
 | VGT | 0.05% per side | 1/4 | 1/4 |
 | SPY | none | 0/4 | 1/4 |
-| SPY | 0.05% per side | 0/4 | 1/4 |
-| XIU.TO | none | 2/4 | 2/4 |
+| SPY | 0.05% per side | 0/4 | 0/4 |
+| XIU.TO | none | 1/4 | 2/4 |
 | XIU.TO | 0.05% per side | 1/4 | 1/4 |
+
+## The investor's question: invest now, spread over 6 months, or wait for the signal?
+
+Each month since the first out-of-sample year, $1 invested three ways and valued 12 months later (0.05% per purchase; cash waiting earns the policy rate; the signal uses out-of-sample probabilities only).
+
+| Asset | Start months | Now (avg value) | Spread (avg) | Signal (avg) | Spread beats now | Signal beats now | Median wait |
+|---|---|---|---|---|---|---|---|
+| QQQ | 191 (2010-01 to 2025-11) | 1.203 | 1.162 | 1.175 | 25% | 39% | 3 days |
+| VGT | 191 (2010-01 to 2025-11) | 1.211 | 1.170 | 1.195 | 26% | 40% | 2 days |
+| SPY | 191 (2010-01 to 2025-11) | 1.150 | 1.121 | 1.137 | 26% | 43% | 10 days |
+| XIU.TO | 191 (2010-01 to 2025-11) | 1.105 | 1.086 | 1.091 | 34% | 42% | 35 days |
+
+## Provenance
+
+The model is the backtesting engine's (`src/ml`): same target (+2% within 5 days), same logistic regression, same features and same 5-day holding rule, reimplemented in `wealthpilot/timing.py` with fixed indicator settings. `tests/test_timing_parity.py` checks, when `BACKTESTING_ENGINE_PATH` points to the engine, that the indicator features equal the engine's own `generateFeatures` output. The engine's C++ metrics are ported to NumPy (`wealthpilot/metrics.py`) and cross-checked against the compiled module with `METRICS_CPP_PATH`.
 
 ## Reading
 
