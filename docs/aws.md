@@ -7,6 +7,7 @@
 | Amazon S3 (`wealthpilot-polyfinances-008971659304`) | Data files and trained models (`inflation_model.json`, `asset_forecast.json`, `timing_model.json`) | Versioned bucket: the data behind a result can be identified; synced to local `/tmp` once per container |
 | Amazon DynamoDB (`wealthpilot-traces`) | Session state (`STATE`) and the audit trail (`TURN#<timestamp>` with every receipt and verification report) | Any number shown to a user can be traced to the tool call that produced it |
 | IAM | Least-privilege role; the UI/API invokes Bedrock, S3, and DynamoDB with scoped permissions | `bedrock:InvokeModel`, read-only S3 (`s3:GetObject`, `s3:ListBucket`), CRUD on `wealthpilot-traces` |
+| Amazon SageMaker (training jobs) + EventBridge Scheduler | Monthly retraining of the three models in AWS's scikit-learn image; candidates published only after review | Each model traceable to a job: code commit, data hashes, library versions, metrics |
 | CloudWatch / CloudTrail | Logs of Lambda and Bedrock calls | Operational trace in addition to the DynamoDB audit trail |
 
 Refusal & throttling resilience: `BedrockLLM` in `wealthpilot/agents/llm.py` automatically falls back from `global.anthropic.claude-haiku-4-5-20251001-v1:0` to `global.amazon.nova-2-lite-v1:0` on model refusal, and translates tool-use turns across model families.
@@ -83,6 +84,40 @@ Design choices and limits, stated plainly:
 - Live quotes go through the Yahoo relay from AWS IP addresses; Yahoo may rate-limit them. The plan, time machine,
   scores and advocate use the stored starter data and keep working.
 - Cost: pay per request (Lambda, DynamoDB on demand, CloudFront). Idle cost is close to zero.
+
+## Model training on Amazon SageMaker
+
+```
+EventBridge Scheduler (1st of each month) ─┐
+scripts/train_aws.sh (on demand) ──────────┴─> launcher Lambda ─> SageMaker training job (ml.m5.large)
+                                                                   image: AWS sagemaker-scikit-learn:1.4-2-cpu-py3
+                                                                   code:  training/entry.py + wealthpilot/
+                                                                   in:    <prefix>/external/, <prefix>/models/
+                                                                   out:   <prefix>/training/<job>/output/
+                                                                          model.tar.gz  (3 candidate models + report.json)
+                                                                          output.tar.gz (snapshot of the exact data used)
+scripts/promote_models.sh <job> (after you confirm) ─> <prefix>/models/ ─> website API
+```
+
+Why: the models are small (they train in about 35 seconds), so this is not about compute. Every model the website
+shows can be traced to one training job: the code commit, the data files (SHA-256), the image and library versions,
+and the validation metrics (also charted in the SageMaker console). Retraining is monthly and uses the same
+walk-forward protocol and the same gates fixed in advance.
+
+The website never changes on its own. A job writes **candidates**; `scripts/promote_models.sh <job>` shows the
+live and candidate results side by side and publishes only after a yes. `scripts/deploy_aws.sh` keeps published
+models (`FORCE_GIT_MODELS=1` goes back to the ones in git).
+
+Run from AWS CloudShell (region `us-east-1`), in the repository folder:
+
+```bash
+bash scripts/train_aws.sh
+```
+
+Checked before deploying: with the stored data, a job reproduces the live models exactly (same numbers to 1e-9),
+including with the image's library versions (scikit-learn 1.9.0, pandas 2.2.3); a simulated job with a fresh
+download trains the three models in about 35 seconds. Cost: about 1 to 2 cents per job. No SageMaker endpoint:
+predictions stay in the API (milliseconds), so nothing is billed while the site is idle.
 
 ## Local development without AWS
 

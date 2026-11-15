@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  WealthPilot model training on Amazon SageMaker. A monthly schedule (EventBridge Scheduler) starts a small Lambda
+  that launches a SageMaker training job; the job retrains the three models with AWS's managed scikit-learn image and
+  writes CANDIDATE artifacts to the data bucket. The website stack is separate and keeps its models until
+  scripts/promote_models.sh publishes a candidate. Deployed with scripts/train_aws.sh from AWS CloudShell.
+
+Parameters:
+  DataBucketName:
+    Type: String
+  DataPrefix:
+    Type: String
+    Default: wealthpilot
+  TrainingSource:
+    Type: String
+    Description: s3 URI of the code tarball (uploaded by scripts/train_aws.sh)
+  GitCommit:
+    Type: String
+    Default: unknown
+  TrainingInstance:
+    Type: String
+    Default: ml.m5.large
+  ScheduleState:
+    Type: String
+    Default: ENABLED
+    AllowedValues: [ENABLED, DISABLED]
+
+Resources:
+  # Role SageMaker assumes while training: read the data, write only under training/, logs and metrics.
+  TrainingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: sagemaker.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: wealthpilot-training
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${DataBucketName}/${DataPrefix}/*"
+              - Effect: Allow
+                Action: s3:GetBucketLocation
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${DataBucketName}"
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${DataBucketName}"
+                Condition:
+                  StringLike: {"s3:prefix": [!Sub "${DataPrefix}/*"]}
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${DataBucketName}/${DataPrefix}/training/*"
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents, logs:DescribeLogStreams]
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/sagemaker/TrainingJobs*"
+              - Effect: Allow
+                Action: cloudwatch:PutMetricData
+                Resource: "*"
+                Condition:
+                  StringLike: {"cloudwatch:namespace": "/aws/sagemaker/TrainingJobs"}
+              - Effect: Allow   # pull AWS's managed scikit-learn image
+                Action: [ecr:GetAuthorizationToken, ecr:BatchGetImage, ecr:GetDownloadUrlForLayer,
+                         ecr:BatchCheckLayerAvailability]
+                Resource: "*"
+
+  LauncherFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.13
+      CodeUri: ../build/trainer        # built by scripts/train_aws.sh (three small files, boto3 is in the runtime)
+      Handler: wealthpilot.aws.training.launch_handler
+      MemorySize: 256
+      Timeout: 30
+      Environment:
+        Variables:
+          TRAINING_ROLE_ARN: !GetAtt TrainingRole.Arn
+          DATA_BUCKET: !Ref DataBucketName
+          DATA_PREFIX: !Ref DataPrefix
+          TRAINING_SOURCE: !Ref TrainingSource
+          GIT_COMMIT: !Ref GitCommit
+          TRAINING_INSTANCE: !Ref TrainingInstance
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [sagemaker:CreateTrainingJob, sagemaker:AddTags]
+              Resource: !Sub "arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:training-job/wealthpilot-train-*"
+            - Effect: Allow
+              Action: iam:PassRole
+              Resource: !GetAtt TrainingRole.Arn
+              Condition:
+                StringEquals: {"iam:PassedToService": sagemaker.amazonaws.com}
+      Events:
+        Monthly:                       # 1st of each month, 10:17 UTC: new candidates, never published automatically
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: "cron(17 10 1 * ? *)"
+            State: !Ref ScheduleState
+            Input: '{"fetch": true}'
+
+Outputs:
+  LauncherFunctionName: {Value: !Ref LauncherFunction}
+  TrainingRoleArn: {Value: !GetAtt TrainingRole.Arn}
+  CandidatesLocation: {Value: !Sub "s3://${DataBucketName}/${DataPrefix}/training/"}
