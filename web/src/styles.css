@@ -335,3 +335,19 @@ table.data td.num,table.data th.num{text-align:right;white-space:nowrap}
 .pill.info{background:#eeece7;color:#5d6466}.pill.info::before{background:#9a9da0}
 .pill-stack{display:flex;flex-direction:column;align-items:flex-start}
 .page > .analysis-grid .analysis-stat{background:white;border:1px solid var(--line)}
+
+/* Tested forecast model */
+.model-block{margin-top:16px;border-top:1px solid #eeece8;padding-top:14px}
+.model-block .kicker{font-size:11px;color:#a18b65;text-transform:uppercase;letter-spacing:.8px;font-weight:600}
+.model-r2{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px}
+.model-r2 span{display:block;font-size:12px;color:var(--muted)}
+.model-r2 strong{font-size:26px;letter-spacing:-.8px}
+.r2-scale{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:12px}
+.r2-step{border-radius:7px;padding:6px 6px;font-size:10px;text-align:center;background:#f4f2ee;color:#8b9294;border:1px solid transparent}
+.r2-step b{display:block;font-size:11px}
+.r2-step small{display:block;margin-top:2px}
+.r2-step.current.red{background:#f8e9e9;color:#9c3838;border-color:#e6b7b7}
+.r2-step.current.yellow{background:#fbf3df;color:#86651a;border-color:#ead39a}
+.r2-step.current.green{background:#e8f3ef;color:#0f6a50;border-color:#a9d3c4}
+.model-block .small{margin-top:12px;color:#4b5356}
+@media(max-width:650px){.r2-scale{grid-template-columns:repeat(2,minmax(0,1fr))}}

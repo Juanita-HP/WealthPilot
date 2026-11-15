@@ -7,6 +7,8 @@ pytest>=8
 fastapi>=0.110
 uvicorn>=0.29
 httpx>=0.27
+# return forecast model for crypto and gold (wealthpilot/forecast.py)
+scikit-learn>=1.4
 # live Yahoo Finance data in the ticker tab (fundamentals, any ticker) and scripts/build_dataset.py
 yfinance>=0.2
 # optional, only for tests that cross-check indicators (pip install --use-pep517 ta)

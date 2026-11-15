@@ -1,0 +1,291 @@
+{
+  "trained_on": "2026-11-15",
+  "method": "Return forecast for assets with no statements and no planning assumption (crypto, gold), tested honestly.\n\nQuestion: can a model predict the next 3 months' return of Bitcoin, Ether or gold better than simply using the\nhistorical average? Most research on asset returns says it rarely can (Welch and Goyal, 2008), so the answer is\nmeasured, shown to the investor, and only used for the gauge if it clearly passes.",
+  "target": "log return over the next 3 months",
+  "min_train_months": 36,
+  "rating_scale": [
+    {
+      "from": 0.05,
+      "label": "Very good"
+    },
+    {
+      "from": 0.02,
+      "label": "Good"
+    },
+    {
+      "from": 0.0,
+      "label": "Medium"
+    },
+    {
+      "from": -0.05,
+      "label": "Bad"
+    },
+    {
+      "from": null,
+      "label": "Very bad"
+    }
+  ],
+  "assets": {
+    "BTC-USD": {
+      "name": "Bitcoin",
+      "horizon_months": 3,
+      "history": "2015-09-30 to 2026-11-30",
+      "months": 135,
+      "tested": "2018-12-31 to 2026-08-31",
+      "n_predictions": 93,
+      "models": {
+        "gradient_boosting": {
+          "r2_oos": -0.334570701258075,
+          "r2_vs_zero": -0.3237186162873156,
+          "hit_rate": 0.5483870967741935,
+          "mae": 0.3085421960270984,
+          "dm_stat": -1.5527964725803456,
+          "dm_p": 0.9397641171529149,
+          "rating": {
+            "label": "Very bad",
+            "tone": "red"
+          }
+        },
+        "ridge": {
+          "r2_oos": -0.25472415060393794,
+          "r2_vs_zero": -0.2445213392546537,
+          "hit_rate": 0.6021505376344086,
+          "mae": 0.32174141020285146,
+          "dm_stat": -1.2406395852715026,
+          "dm_p": 0.8926305391864626,
+          "rating": {
+            "label": "Very bad",
+            "tone": "red"
+          }
+        },
+        "last_3m": {
+          "r2_oos": -0.8198922688232206,
+          "r2_vs_zero": -0.805093783047772,
+          "hit_rate": 0.5053763440860215,
+          "mae": 0.37758136457614594,
+          "dm_stat": -2.78717832896524,
+          "dm_p": 0.9973415394442415,
+          "rating": {
+            "label": "Very bad",
+            "tone": "red"
+          }
+        }
+      },
+      "baselines": {
+        "hit_rate_mean": 0.5806451612903226
+      },
+      "usable": false,
+      "forecast": {
+        "as_of": "2026-11-15",
+        "log_return": -0.07245866010284985,
+        "return": -0.06989580372266559,
+        "low": -0.43252831195471286,
+        "high": 0.5360512512486209,
+        "interval": "80%",
+        "interval_coverage_in_test": 0.7849462365591398,
+        "annualized": -0.251612689634989
+      },
+      "importance": [
+        {
+          "feature": "usd_3m",
+          "label": "U.S. dollar strength (3 months)",
+          "importance": 0.322464996676722
+        },
+        {
+          "feature": "dd_12m",
+          "label": "Distance from 12-month high",
+          "importance": 0.2550746224813383
+        },
+        {
+          "feature": "mom_12m",
+          "label": "12-month price trend",
+          "importance": 0.19051536603173808
+        },
+        {
+          "feature": "real_rate",
+          "label": "U.S. real interest rate",
+          "importance": 0.1728720491280929
+        },
+        {
+          "feature": "mom_1m",
+          "label": "1-month price trend",
+          "importance": 0.09461658157737593
+        }
+      ]
+    },
+    "ETH-USD": {
+      "name": "Ether",
+      "horizon_months": 3,
+      "history": "2018-11-30 to 2026-11-30",
+      "months": 97,
+      "tested": "2022-02-28 to 2026-08-31",
+      "n_predictions": 55,
+      "models": {
+        "gradient_boosting": {
+          "r2_oos": -0.025009443005914678,
+          "r2_vs_zero": -0.32911183705747904,
+          "hit_rate": 0.509090909090909,
+          "mae": 0.3258336902116645,
+          "dm_stat": -0.1521171616873312,
+          "dm_p": 0.5604527356710615,
+          "rating": {
+            "label": "Bad",
+            "tone": "red"
+          }
+        },
+        "ridge": {
+          "r2_oos": 0.14744783563223463,
+          "r2_vs_zero": -0.10548949680615949,
+          "hit_rate": 0.5454545454545454,
+          "mae": 0.30476731187388784,
+          "dm_stat": 0.6215812043460313,
+          "dm_p": 0.2671086416316627,
+          "rating": {
+            "label": "Very good",
+            "tone": "green"
+          }
+        },
+        "last_3m": {
+          "r2_oos": -0.7588851391911826,
+          "r2_vs_zero": -1.280715630938829,
+          "hit_rate": 0.43636363636363634,
+          "mae": 0.4305771745478681,
+          "dm_stat": -2.07405253386247,
+          "dm_p": 0.9809627839086709,
+          "rating": {
+            "label": "Very bad",
+            "tone": "red"
+          }
+        }
+      },
+      "baselines": {
+        "hit_rate_mean": 0.509090909090909
+      },
+      "usable": false,
+      "forecast": {
+        "as_of": "2026-11-15",
+        "log_return": -0.07771999046083307,
+        "return": -0.07477653832917763,
+        "low": -0.47679496193150384,
+        "high": 0.4539887088990322,
+        "interval": "80%",
+        "interval_coverage_in_test": 0.7818181818181819,
+        "annualized": -0.2671981652285367
+      },
+      "importance": [
+        {
+          "feature": "usd_3m",
+          "label": "U.S. dollar strength (3 months)",
+          "importance": 0.29123158688893525
+        },
+        {
+          "feature": "vol_3m",
+          "label": "3-month volatility",
+          "importance": 0.22580332028061206
+        },
+        {
+          "feature": "mom_6m",
+          "label": "6-month price trend",
+          "importance": 0.19120064554992652
+        },
+        {
+          "feature": "real_rate",
+          "label": "U.S. real interest rate",
+          "importance": 0.1099162291793492
+        },
+        {
+          "feature": "oil_3m",
+          "label": "Oil price (3 months)",
+          "importance": 0.0760513381087399
+        }
+      ]
+    },
+    "GLD": {
+      "name": "Gold (SPDR Gold Shares)",
+      "horizon_months": 3,
+      "history": "2005-11-30 to 2026-11-30",
+      "months": 253,
+      "tested": "2009-02-28 to 2026-08-31",
+      "n_predictions": 211,
+      "models": {
+        "gradient_boosting": {
+          "r2_oos": -0.0719504225862051,
+          "r2_vs_zero": -0.04468758100825476,
+          "hit_rate": 0.5687203791469194,
+          "mae": 0.06670170777141153,
+          "dm_stat": -1.1396689866321685,
+          "dm_p": 0.8727878837638714,
+          "rating": {
+            "label": "Very bad",
+            "tone": "red"
+          }
+        },
+        "ridge": {
+          "r2_oos": -0.05651100642836626,
+          "r2_vs_zero": -0.029640834462646426,
+          "hit_rate": 0.5829383886255924,
+          "mae": 0.06616905962925262,
+          "dm_stat": -0.7429405819198018,
+          "dm_p": 0.771241172634624,
+          "rating": {
+            "label": "Very bad",
+            "tone": "red"
+          }
+        },
+        "last_3m": {
+          "r2_oos": -0.8730575596112116,
+          "r2_vs_zero": -0.8254202151612109,
+          "hit_rate": 0.5308056872037915,
+          "mae": 0.08905323883806371,
+          "dm_stat": -4.377682656504503,
+          "dm_p": 0.9999940026086803,
+          "rating": {
+            "label": "Very bad",
+            "tone": "red"
+          }
+        }
+      },
+      "baselines": {
+        "hit_rate_mean": 0.5924170616113744
+      },
+      "usable": false,
+      "forecast": {
+        "as_of": "2026-11-13",
+        "log_return": 0.005653844000091429,
+        "return": 0.0056698571404551895,
+        "low": -0.10345489777813394,
+        "high": 0.1277049441909767,
+        "interval": "80%",
+        "interval_coverage_in_test": 0.8009478672985783,
+        "annualized": 0.022873042357167455
+      },
+      "importance": [
+        {
+          "feature": "real_rate",
+          "label": "U.S. real interest rate",
+          "importance": 0.24262033115402848
+        },
+        {
+          "feature": "dd_12m",
+          "label": "Distance from 12-month high",
+          "importance": 0.14154385035919095
+        },
+        {
+          "feature": "oil_3m",
+          "label": "Oil price (3 months)",
+          "importance": 0.12047843671093734
+        },
+        {
+          "feature": "vol_3m",
+          "label": "3-month volatility",
+          "importance": 0.11241301508488574
+        },
+        {
+          "feature": "mom_1m",
+          "label": "1-month price trend",
+          "importance": 0.07443139514137714
+        }
+      ]
+    }
+  }
+}

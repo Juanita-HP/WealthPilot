@@ -39,6 +39,8 @@ Copy the organizers' starter files (`prices_daily.csv`, `fx_usdcad_daily.csv`, `
 ```bash
 python scripts/fetch_macro_history.py   # macro history since 1995
 python scripts/fetch_international.py   # international stock funds (XEF.TO, XEC.TO) for the global split
+python scripts/fetch_long_history.py    # long price history of gold and crypto (forecast model)
+python scripts/train_asset_forecast.py  # crypto and gold forecast, tested out of sample (models/model_card_asset_forecast.md)
 python scripts/train_inflation.py        # inflation model + model card
 pytest
 ```

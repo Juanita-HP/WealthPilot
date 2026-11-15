@@ -118,7 +118,45 @@ function useQuote(ticker) {
   return state;
 }
 
-function ScoreCard({ kicker, title, score, label, sentence, zones, names, note, fallback, needle }) {
+const SCALE = [["Very bad", "below −5%", "red"], ["Bad", "−5% to 0%", "red"], ["Medium", "0% to 2%", "yellow"],
+               ["Good", "2% to 5%", "green"], ["Very good", "5% and more", "green"]];
+
+// A tested forecast model (crypto, gold): R² out of sample, its rating on a fixed scale, and the forecast itself.
+function ModelBlock({ model }) {
+  const m = model.models.gradient_boosting;
+  const f = model.forecast;
+  return (
+    <div className="model-block">
+      <div className="kicker">Prediction model, tested out of sample</div>
+      <div className="model-r2">
+        <div>
+          <span>R² vs the historical average</span>
+          <strong>{signedPct(m.r2_oos, 1)}</strong>
+        </div>
+        <div className={"pill " + m.rating.tone} style={{ marginTop: 0 }}>{m.rating.label}</div>
+      </div>
+      <div className="r2-scale">
+        {SCALE.map(([label, range, tone]) => (
+          <span key={label} className={"r2-step " + tone + (label === m.rating.label ? " current" : "")}>
+            <b>{label}</b><small>{range}</small>
+          </span>
+        ))}
+      </div>
+      <p className="small">
+        Above 0%, the model predicts better than simply using the average past return; below 0%, worse.
+        Direction right in {pct(m.hit_rate)} of {model.n_predictions} months ({model.tested}), against {pct(model.baselines.hit_rate_mean)} for the average.
+        Statistical test vs the average: p = {num(m.dm_p) ? m.dm_p.toFixed(2) : "—"} {num(m.dm_p) && m.dm_p < 0.1 ? "(significant)" : "(not significant)"}.
+      </p>
+      <p className="small">
+        Its forecast for the next {model.horizon_months} months: <b>{signedPct(f.return, 1)}</b>, with an 80% range from{" "}
+        {signedPct(f.low, 0)} to {signedPct(f.high, 0)} (data to {f.as_of}).
+        {model.usable ? " The needle uses this forecast." : " Not used for the needle: the model does not pass the test. Judge it with its R²."}
+      </p>
+    </div>
+  );
+}
+
+function ScoreCard({ kicker, title, score, label, sentence, zones, names, note, fallback, needle, children }) {
   return (
     <div className="score-card">
       <div className="kicker">{kicker}</div>
@@ -130,6 +168,7 @@ function ScoreCard({ kicker, title, score, label, sentence, zones, names, note, 
       <div className="gauge-label">{label}</div>
       <GaugeLegend zones={zones} names={names} />
       <div className="score-text">{sentence}</div>
+      {children}
       {note && <div className="analysis-disclaimer">{note}</div>}
     </div>
   );
@@ -237,13 +276,19 @@ export default function Research({ symbol }) {
               <ScoreCard kicker="For your profile" title="Profile fit" score={ins.fit.score} label={ins.fit.label}
                          sentence={ins.fit.sentence} zones={ins.fit.zones} names={["Poor fit", "Possible", "Good fit"]} />
               <ScoreCard kicker="Unbiased potential" title="Measured growth" score={ins.potential.score}
-                         label={ins.potential.long_run_assumption ? "Diversified fund" : ins.potential.label}
+                         label={ins.potential.long_run_assumption ? "Diversified fund"
+                           : ins.potential.model ? (ins.potential.model.usable ? "Forecast that passed the test" : "Not scored: the model fails the test")
+                           : ins.potential.label}
                          fallback={ins.potential.long_run_assumption ? pct(ins.potential.long_run_assumption.annual_return, 1) + " / yr" : "—"}
                          needle={ins.potential.score ?? ins.potential.assumption_score}
                          sentence={ins.potential.sentence} zones={ins.potential.zones} names={["Weak", "Moderate", "Strong"]}
-                         note={ins.potential.score == null && ins.potential.long_run_assumption
+                         note={ins.potential.model
+                           ? "Gradient boosting on price trends, volatility, real rates, the dollar and oil, refitted each month on the past only. Not your profile."
+                           : ins.potential.score == null && ins.potential.long_run_assumption
                            ? "Planning assumption for the fund's market (FP Canada / IFP 2026): not a forecast, not your profile."
-                           : "Measured data only: no analyst opinions, no news, not your profile."} />
+                           : "Measured data only: no analyst opinions, no news, not your profile."}>
+                {ins.potential.model && <ModelBlock model={ins.potential.model} />}
+              </ScoreCard>
             </div>
             <div className="analysis-grid">
               <div className="analysis-stat"><span>Annualized volatility</span><strong>{pct(ins.stats.volatility, 1)}</strong></div>
@@ -260,6 +305,17 @@ export default function Research({ symbol }) {
                 <ul>{ins.fit.notes.map(n => <li key={n}>{n}</li>)}</ul>
                 <p className="analysis-status"><b>Measured growth</b> · {ins.potential.label}</p>
                 <FactorTable score={ins.potential} labels={ins.factor_labels} />
+                {ins.potential.model && (
+                  <table className="data">
+                    <thead><tr><th>Model (tested {ins.potential.model.tested})</th><th className="num">R² vs average</th><th>Rating</th><th className="num">Direction right</th><th className="num">Test p-value</th></tr></thead>
+                    <tbody>{[["gradient_boosting", "Gradient boosting (used)"], ["ridge", "Ridge regression"], ["last_3m", "Last 3 months repeat"]].map(([k, label]) => {
+                      const m = ins.potential.model.models[k];
+                      return <tr key={k}><td>{label}</td><td className="num">{signedPct(m.r2_oos, 1)}</td><td>{m.rating.label}</td>
+                        <td className="num">{pct(m.hit_rate)}</td><td className="num">{num(m.dm_p) ? m.dm_p.toFixed(2) : "—"}</td></tr>;
+                    })}</tbody>
+                  </table>
+                )}
+                {ins.potential.model && <p className="analysis-status">Most important inputs recently: {ins.potential.model.importance.slice(0, 3).map(x => x.label.toLowerCase()).join(", ")}.</p>}
                 <ul>
                   {ins.potential.notes.map(n => <li key={n}>{n}</li>)}
                   {num(ins.analyst_upside) && <li>For information, analysts target {signedPct(ins.analyst_upside, 0)} on average: an opinion, left out of the potential score.</li>}

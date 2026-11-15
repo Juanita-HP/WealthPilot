@@ -38,6 +38,8 @@ FRED = {
     "DCOILWTICO": ("Crude oil price, West Texas Intermediate", "USD per barrel", "daily"),
     "DEXCAUS": ("Canadian dollars to one U.S. dollar (noon/close)", "CAD per USD", "daily"),
     "DFEDTARU": ("Federal funds target range, upper limit", "percent", "daily"),
+    "DGS10": ("U.S. 10-year Treasury constant maturity yield", "percent", "daily"),
+    "DTWEXBGS": ("Nominal broad U.S. dollar index", "index Jan 2006=100", "daily"),
 }
 
 

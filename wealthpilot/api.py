@@ -31,7 +31,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from . import accounts, advocate, data, goals as gl, lab, macro_news, news
+from . import accounts, advocate, data, forecast as fc, goals as gl, lab, macro_news, news
 from . import onboarding as ob
 from . import profile as pf
 from . import risks, strategist, ticker as tk, time_machine as tm, whatif
@@ -254,6 +254,15 @@ def risk_text(r) -> str:
                           "No single company dominates: risk is spread across broad funds."),
         "inflation": f"Assumed real return of about {pct(v, 1)} a year after inflation (assumption).",
     }.get(r.kind, r.reason)
+
+
+def forecast_for(symbol: str) -> dict | None:
+    """Tested return forecast (crypto, gold) from models/asset_forecast.json, if trained."""
+    art = fc.load_artifact()
+    if not art or symbol not in art.get("assets", {}):
+        return None
+    a = art["assets"][symbol]
+    return None if "error" in a else {**a, "trained_on": art["trained_on"], "rating_scale": art["rating_scale"]}
 
 
 # Funds have no statements to measure: their gauge places the planning assumption of their market between the
@@ -507,6 +516,8 @@ def insights(symbol: str, user: str = Depends(current_user)):
     symbol = symbol.strip().upper()
     st = user_state(user)
 
+    model = forecast_for(symbol)
+
     def compute():
         ov, live, note = _overview(symbol, st["effective"], st["weights"])
         fit, pot, lra = ov["fit_score"], ov["potential_score"], ov["long_run_assumption"]
@@ -517,6 +528,12 @@ def insights(symbol: str, user: str = Depends(current_user)):
                         f"{pct(lra['annual_return'], 1)} a year ({lra['source']}), not a forecast. The needle places it "
                         f"between the lowest assumption ({pct(LOW_R, 1)}, short-term deposits) and the highest "
                         f"({pct(HIGH_R, 1)}, emerging-market stocks).")
+        elif pot["label"] == "Not applicable" and model:
+            m = model["models"]["gradient_boosting"]
+            pot_text = (f"No financial statements and no recognized planning assumption, so a model was tested instead: "
+                        f"its R² against the historical average is {pct(m['r2_oos'], 1)} ({m['rating']['label'].lower()}). "
+                        + ("It passes the test, so the needle uses its forecast." if model["usable"] else
+                           "It does not do reliably better than the average, so the gauge stays unscored."))
         elif pot["label"] == "Not applicable":
             pot_text = "Not assessable: no financial statements and no recognized assumption for this asset."
         else:
@@ -528,7 +545,9 @@ def insights(symbol: str, user: str = Depends(current_user)):
                     "zones": [{"from": 0, "to": 40, "tone": "red"}, {"from": 40, "to": 70, "tone": "yellow"},
                               {"from": 70, "to": 100, "tone": "green"}]},
             "potential": {**pot, "sentence": pot_text, "long_run_assumption": lra,
-                          "assumption_score": assumption_score(lra["annual_return"]) if lra else None,
+                          "assumption_score": assumption_score(lra["annual_return"]) if lra else
+                          (assumption_score(model["forecast"]["annualized"]) if model and model["usable"] else None),
+                          "model": model,
                           "zones": [{"from": 0, "to": 45, "tone": "red"}, {"from": 45, "to": 70, "tone": "yellow"},
                                     {"from": 70, "to": 100, "tone": "green"}]},
             "factor_labels": FACTOR_LABEL,
