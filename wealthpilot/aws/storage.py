@@ -42,6 +42,7 @@ def configure_paths(root: Path) -> None:
     """Point the data and model loaders at a synced directory (before importing them)."""
     os.environ["WEALTHPILOT_DATA_DIR"] = str(root / "starter")
     os.environ["WEALTHPILOT_MODEL_PATH"] = str(root / "models" / "inflation_model.json")
+    os.environ.setdefault("WEALTHPILOT_NEWS_DIR", str(root / "news"))  # writable cache for headlines and official texts
 
 
 class TraceStore:

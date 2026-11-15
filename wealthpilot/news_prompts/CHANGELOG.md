@@ -20,3 +20,12 @@ Added opinion cues ("take", "verdict", "thinks", "bets", "calls for", "flags", "
 "Jim Cramer has a strong take on Nvidia" was shown as a fact in the interface. Type accuracy 70% to 77%, predictive
 recall 48% to 66% on golden_v0. These cues were chosen after reading the errors on the same set, so the gain is
 optimistic; a second, unseen labeled set is needed to confirm it.
+
+## macro-rules-v1 and macro v1 (official texts)
+Full texts of official releases (Bank of Canada, Federal Reserve, Statistics Canada). The rule analyzer reads the
+decision (policy rate, CPI, unemployment, GDP), the risk factors with exact quotes, and the share of forecast
+sentences. It is checked against the official data series the same institutions publish (`scripts/eval_macro.py`,
+`docs/macro_eval.md`): 11 of 11 checkable decisions read correctly on the first run (value and direction). The CPI
+direction is acceleration versus the previous month, not the sign of the annual rate; the rules were written while
+reading recent releases, so later releases are the real test. Prompt `macro_v1.md` gives Claude the same task; quotes
+it returns are kept only if found verbatim in the text.

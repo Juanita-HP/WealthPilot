@@ -8,3 +8,5 @@ data/cache/
 data/news/headlines_*.jsonl
 data/news/cache/
 data/users/
+data/news/pages/
+data/news/macro/

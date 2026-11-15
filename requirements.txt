@@ -1,5 +1,7 @@
 numpy>=1.26
 pandas>=2.1
+# reading official news texts (wealthpilot/webtext.py)
+beautifulsoup4>=4.12
 pytest>=8
 streamlit>=1.40
 plotly>=5.20

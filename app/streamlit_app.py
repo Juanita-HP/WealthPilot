@@ -25,7 +25,7 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from wealthpilot import accounts, advocate, data, goals as gl, lab, news, onboarding as ob  # noqa: E402
+from wealthpilot import accounts, advocate, data, goals as gl, lab, macro_news, news, onboarding as ob  # noqa: E402
 from wealthpilot import profile as pf, risks, strategist, ticker as tk, time_machine as tm, whatif  # noqa: E402
 
 st.set_page_config(page_title="WealthPilot", page_icon="🧭", layout="wide")
@@ -138,6 +138,7 @@ CHALLENGE_FR = {"SINGLE_SECURITY": "Trop gros pour un seul titre", "EQUITY_ABOVE
                 "RISK_JUMP": "Le risque grimpe fortement", "HORIZON_MISMATCH": "Trop long à récupérer pour votre horizon",
                 "RECENCY_BIAS": "Biais de récence", "HIDDEN_CONCENTRATION": "Diversification moins grande qu'il n'y paraît",
                 "HOME_BIAS": "Biais domestique", "HYPE": "Beaucoup de bruit médiatique",
+                "NEWS_EXPOSURE": "Dépendance à un sujet d'actualité",
                 "GOLD_ABOVE_LIMIT": "Trop d'or", "EQUITY_BELOW_RANGE": "Peu d'actions pour votre niveau"}
 
 
@@ -229,6 +230,90 @@ def news_digest(symbol: str) -> dict | None:
         return news.digest(symbol, news.recent_headlines(symbol)).to_dict()
     except Exception:
         return None
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def macro_items() -> list[dict]:
+    try:
+        return macro_news.recent()
+    except Exception:
+        return []
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def article_texts(symbol: str) -> dict | None:
+    try:
+        return news.read_texts([h for h in news.recent_headlines(symbol) if news.is_relevant(h)])
+    except Exception:
+        return None
+
+
+MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre",
+        "novembre", "décembre"]
+PUBLISHER_SHORT = {"Bank of Canada": "Banque du Canada", "Federal Reserve": "Réserve fédérale (É.-U.)",
+                   "Statistics Canada": "Statistique Canada"}
+VERDICT_ANALOG = {"clear": "écart net", "unclear": "pas d'effet net", "too_few": "trop peu de cas"}
+
+
+def date_fr(iso: str) -> str:
+    y, mth, d = iso[:10].split("-")
+    return f"{int(d)} {MOIS[int(mth) - 1]} {y}"
+
+
+def news_box(weights: dict, amount: float) -> None:
+    """Official global news, read in full, mapped to the investor's own portfolio."""
+    st.markdown("#### L'actualité et votre portefeuille")
+    items = macro_items()
+    if not items:
+        note("Communiqués officiels indisponibles pour le moment (connexion aux sites de la Banque du Canada, "
+             "de la Fed et de Statistique Canada).")
+        return
+    imp = macro_news.impact(weights, universe, items, px_cad, amount=amount, top=5 if detailed else 3)
+    for it in imp["items"]:
+        with bordered():
+            note(f"{date_fr(it['published_at'])} · {PUBLISHER_SHORT.get(it['publisher'], it['publisher'])} · "
+                 f"{it['factor_fr']}")
+            say(f"**{it['fact']}**")
+            say(it["message"])
+            say(it["note"])
+            if detailed:
+                with st.expander("Le texte, les placements touchés et le passé"):
+                    say("**Ce que dit le texte officiel**")
+                    for q in it["quotes"]:
+                        tag = "fait" if q["kind"] == "fact" else "prévision de la source"
+                        say(f"> {q['text']}  \n> *({tag})*")
+                    note(f"Statut du texte : {it['text_status_fr']}. {it['forward_share'] * 100:.0f} % des phrases sont des "
+                         f"prévisions de la source. Analyse : {it['analyzer']}. [Lire le communiqué]({it['link']})")
+                    lines = it["exposure"]["lines"]
+                    if lines:
+                        st.dataframe(pd.DataFrame([{"Placement": x["name"], "Part": pfr(x["weight"], 0),
+                                                    "Lien": "direct" if x["channel"] == "direct" else "indirect",
+                                                    "Pourquoi": x["reason"]} for x in lines]),
+                                     hide_index=True, **stretch(st.dataframe))
+                    an = it["analog"]
+                    if an:
+                        say(f"**Après {an['n_events']} événements semblables** ({date_fr(an['first'])} au "
+                            f"{date_fr(an['last'])}), sur les {an['horizon_days']} jours ouvrables suivants :")
+                        st.dataframe(pd.DataFrame([{
+                            "Placement": universe.loc[r["ticker"], "name"] if r["ticker"] in universe.index else r["ticker"],
+                            "Moyenne après": pfr(r["mean_after"]), "D'habitude": pfr(r["usual"]),
+                            "En hausse": f"{r['hit_rate'] * 100:.0f} % des cas", "Verdict": VERDICT_ANALOG[r["verdict"]]}
+                            for r in an["rows"]]), hide_index=True, **stretch(st.dataframe))
+                        note(an["caveat"])
+                    elif it.get("analog_note"):
+                        note(it["analog_note"])
+                    if it["stress"]:
+                        stv = it["stress"]
+                        say(f"**Test de stress lié** (hypothèse, pas une prévision) : {money(stv['dollars'])} "
+                            f"({pfr(stv['portfolio_return'])}) si {STRESS_FR.get(stv['scenario'], stv['label'])}.")
+    note(f"{imp['notes'][0]} Sources : {', '.join(PUBLISHER_SHORT.get(x, x) for x in imp['sources'])}. "
+         "Les nouvelles expliquent ce qui fait bouger votre argent; elles ne changent pas votre répartition "
+         "(réagir à l'actualité, c'est tenter de deviner le marché).")
+
+
+STRESS_FR = {"rates_up_1pt": "les taux montaient d'un point de pourcentage",
+             "stocks_and_bonds_down": "les actions et les obligations baissaient ensemble",
+             "equity_crash": "les actions chutaient fortement"}
 
 
 try:
@@ -535,6 +620,7 @@ with tabs[0]:
                 with st.expander("Ce qui changerait cette réponse"):
                     for c in whatif.goal_conditions(profile, g.goal):
                         say(f"• {c.condition} → {c.effect}")
+    news_box(weights, plan.total_amount)
     rm = risks.risk_map(weights, universe, px_cad, dollar_vol, expected_nominal=profile.expected["net"])
     attention = [r for r in rm if r.level != "low"]
     st.markdown("#### Points d'attention")
@@ -626,14 +712,22 @@ with tabs[1]:
                 if detailed and dg["top_predictive"]:
                     say("**Opinions et prévisions**")
                     for x in dg["top_predictive"][:3]:
-                        say(f"• {x['title']} ({x['publisher']}, confiance {x['trust']:.2f})")
+                        say(f"• {x['title']} ({x['publisher']}, confiance {x['trust']:.2f})".replace("confiance 0.", "confiance 0,"))
 
+            if dg is not None and dg["n"] > 0:
+                at = article_texts(symbol)
+                if at is not None:
+                    note(at["note"])
+                    if detailed:
+                        for r in [r for r in at["rows"] if r["status"] == "ok"][:3]:
+                            for q in r.get("quotes", []):
+                                say(f"> {q}")
             if detailed:
                 with st.expander("Comment les deux scores sont calculés"):
                     for title, sc in (("Adéquation à votre profil", fit), ("Potentiel (données mesurées)", pot)):
                         say(f"**{title}**")
                         rows = [{"Facteur": FACTOR_FR.get(x["name"], x["name"]),
-                                 "Valeur": "—" if x["value"] is None else round(x["value"], 3),
+                                 "Valeur": "—" if x["value"] is None else f"{x['value']:.3g}",
                                  "Note (0 à 1)": "—" if x["score"] is None else round(x["score"], 2),
                                  "Poids": x["weight"], "Règle": x["explanation"]} for x in sc["factors"]]
                         if rows:
@@ -699,7 +793,8 @@ with tabs[3]:
     asym = c1.selectbox("Je veux mettre…", names, index=names.index("TSLA"), key="adv_sym",
                         format_func=lambda t: f"{t} · {universe.loc[t, 'name']}")
     aw = c2.slider("…cette part de mon portefeuille (%)", 1, 60, 30, 1) / 100
-    rv = advocate.review_trade(asym, aw, weights, eff, px_cad, universe, news_digest=news_digest(asym))
+    rv = advocate.review_trade(asym, aw, weights, eff, px_cad, universe, news_digest=news_digest(asym),
+                               macro_items=macro_items())
     st.subheader(VERDICT_FR[rv.verdict])
     for ch_ in rv.challenges:
         with bordered():

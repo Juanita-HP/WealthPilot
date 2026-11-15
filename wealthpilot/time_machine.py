@@ -127,6 +127,14 @@ SHOCKS = {
         "basis": "In 2022 the S&P 500 and U.S. aggregate bonds both fell; see the historical replay.",
         "moves": {"equity": -0.25, "bond": -0.15, "gold": 0.0, "crypto": -0.65},
     },
+    "rates_up_1pt": {
+        "label": "Interest rates up 1 percentage point (hypothetical)",
+        "basis": "A bond's price moves by about minus its duration times the rate change. Approximate durations: "
+                 "Canadian universe bonds (XBB) about 7 years, U.S. aggregate (AGG) about 6, 20+ year Treasuries "
+                 "(TLT) about 16, ultra short-term (ZST) under 1. Equities and gold: rounded assumptions.",
+        "moves": {"equity": -0.05, "bond": -0.06, "gold": -0.03, "crypto": -0.10},
+        "ticker_moves": {"XBB.TO": -0.07, "AGG": -0.06, "TLT": -0.16, "ZST.TO": -0.003},
+    },
     "crypto_winter": {
         "label": "Crypto collapse only (hypothetical)",
         "basis": "Bitcoin fell about 76% peak to trough in the 2021-2026 sample.",
@@ -141,6 +149,9 @@ def shock(weights: dict[str, float], universe: pd.DataFrame, amount: float, scen
     w = pd.Series(weights, dtype=float)
     groups = universe.loc[w.index, "asset_class"].map(ASSET_GROUP)
     moves = groups.map(s["moves"]).fillna(0.0)
+    for t, mv in s.get("ticker_moves", {}).items():
+        if t in moves.index:
+            moves[t] = mv
     ret = float((w * moves).sum())
     by_group = (w * moves).groupby(groups).sum().to_dict()
     return {"scenario": scenario, "label": s["label"], "basis": s["basis"], "kind": "hypothetical",

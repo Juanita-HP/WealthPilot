@@ -37,6 +37,7 @@ FRED = {
     "UNRATE": ("U.S. unemployment rate (SA)", "percent", "monthly"),
     "DCOILWTICO": ("Crude oil price, West Texas Intermediate", "USD per barrel", "daily"),
     "DEXCAUS": ("Canadian dollars to one U.S. dollar (noon/close)", "CAD per USD", "daily"),
+    "DFEDTARU": ("Federal funds target range, upper limit", "percent", "daily"),
 }
 
 
