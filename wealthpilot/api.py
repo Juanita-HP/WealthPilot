@@ -447,7 +447,9 @@ def plan(user: str = Depends(current_user)):
         })
     rm = risks.risk_map(st["weights"], u, m["px_cad"], m["dollar_vol"], expected_nominal=profile.expected["net"])
     card = pf.level_card(profile.level)
+    fin = st["onboarding"].financials
     return {"level": profile.level, "name": card["name"], "score_10": card["score_10"], "total": p.total_amount,
+            "available": fin.cash_savings + fin.investments,
             "goals": goals, "notes": p.notes,
             "risks": [{"kind": r.kind, "label": RISK_LABEL[r.kind], "level": r.level, "text": risk_text(r),
                        "metric": r.metric, "value": r.value, "reason": r.reason} for r in rm],

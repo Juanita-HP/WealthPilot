@@ -92,6 +92,7 @@ class Allocation:
     method: str
     notes: list[str] = field(default_factory=list)
     evidence: dict = field(default_factory=dict)
+    equity_share: float | None = None   # target stock share before themes, used for the return assumption
 
     def to_dict(self):
         return asdict(self)
@@ -125,12 +126,16 @@ def _q(ev: dict, key: str, text: str) -> str:
 
 
 def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = None,
-                      equity_position: float = 0.5) -> Allocation:
+                      equity_position: float | None = None) -> Allocation:
     """Policy portfolio for a profile.
 
-    ``equity_position`` places the stock share inside the level's range
-    (0 = minimum, 1 = maximum, 0.5 = midpoint).
+    ``equity_position`` places the stock share inside the level's range (0 = minimum, 1 = maximum). By default it
+    follows the investor's exact risk score within the level (``profile.equity_position``).
     """
+    from .profile import equity_position as position_for
+    why_position = None
+    if equity_position is None:
+        equity_position, why_position = position_for(profile)
     if not 0 <= equity_position <= 1:
         raise ValueError("equity_position must be between 0 and 1")
     ev = evidence(prices)
@@ -150,7 +155,8 @@ def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = No
     lines.append(Line(BLOCKS["canadian_equity"], ca, "canadian_equity",
                       f"Canadian stocks: {c.home_equity_share:.0%} of the {equity:.0%} stock share "
                       f"(region preference '{p.region}'; level {profile.level} allows "
-                      f"{c.equity_min:.0%} to {c.equity_max:.0%} in stocks)."))
+                      f"{c.equity_min:.0%} to {c.equity_max:.0%} in stocks"
+                      + (f"; {why_position}: {equity:.0%}" if why_position else "") + ")."))
     esg = p.esg in {"prefer", "exclude"}
     tilt = 0.0
     themes = normalize_themes(p.themes)
@@ -215,7 +221,7 @@ def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = No
     weights = {k: v for k, v in weights.items() if v > 1e-9}
     total = sum(weights.values())
     weights = {k: v / total for k, v in weights.items()}  # removes floating-point drift only
-    return Allocation(weights, lines, "policy rules v1", notes, ev)
+    return Allocation(weights, lines, "policy rules v2", notes, ev, equity)
 
 
 def _theme_satellites(lines: list[Line], themes: list[str], profile: InvestorProfile, ev: dict):

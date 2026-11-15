@@ -299,7 +299,7 @@ def evaluate(close: pd.Series, strategy: str, ticker: str = "", params: dict | N
                          "message": f"Invested {res_out['time_invested']:.0%} of the time; missing up days explains part of the gap."})
     if res_out["costs_paid"] > 0.01 * capital:
         findings.append({"code": "COSTS_MATTER", "severity": "info",
-                         "message": f"Trading costs were {res_out['costs_paid']:,.0f} $ out of sample "
+                         "message": f"Trading costs were ${res_out['costs_paid']:,.0f} out of sample "
                                     f"({res_out['costs_paid'] / capital:.1%} of starting capital)."})
 
     return LabResult(

@@ -91,8 +91,8 @@ def replay(weights: dict[str, float], prices: pd.DataFrame, profile: InvestorPro
     exceeded = worst_loss > accepted
     trough_dollars = ep["trough_value"]
     question = (
-        f"On {ep['trough_date'].date()}, your {amount:,.0f} $ would have been worth {trough_dollars:,.0f} $ "
-        f"after peaking at {ep['peak_value']:,.0f} $ on {ep['peak_date'].date()}. "
+        f"On {ep['trough_date'].date()}, your ${amount:,.0f} would have been worth ${trough_dollars:,.0f} "
+        f"after peaking at ${ep['peak_value']:,.0f} on {ep['peak_date'].date()}. "
         f"The worst 12 months ({w12['start']} to {w12['end']}) lost {worst_loss:.1%}; you said you could accept "
         f"{accepted:.0%} in a bad year. Would you have held on?"
     )

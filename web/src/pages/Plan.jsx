@@ -107,7 +107,8 @@ export default function Plan() {
         <div>
           <div className="eyebrow">YOUR PLAN</div>
           <h1>{plan.name} profile · {plan.score_10}/10</h1>
-          <p>{dollars(plan.total)} spread over {plan.goals.length} goal{plan.goals.length > 1 ? "s" : ""}, each invested according to its own horizon.</p>
+          <p>{dollars(plan.total)} already set aside for {plan.goals.length} goal{plan.goals.length > 1 ? "s" : ""}, each invested according to its own horizon.
+            {plan.available - plan.total > 1000 ? ` ${dollars(plan.available - plan.total)} of your savings and investments is not assigned to a goal and is not invested here.` : ""}</p>
         </div>
         <button className="profile-pill" onClick={() => go("profile")}>View or edit your profile</button>
       </div>
