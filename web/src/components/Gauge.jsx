@@ -32,13 +32,17 @@ export default function Gauge({ score, zones, label }) {
         const [x, y] = point(t, R - W / 2 - 14);
         return <text key={t} x={x} y={y + 4} fontSize="11" fill="#9a9da0" textAnchor="middle">{t}</text>;
       })}
-      {has && (
-        <g className="needle" style={{ transform: `rotate(${rotation}deg)`, transformOrigin: `${CX}px ${CY}px` }}>
-          <path d={`M ${CX - 5} ${CY} L ${CX} ${CY - R + 6} L ${CX + 5} ${CY} Z`} fill="#172025" />
-        </g>
+      {has ? (
+        <>
+          <g className="needle" style={{ transform: `rotate(${rotation}deg)`, transformOrigin: `${CX}px ${CY}px` }}>
+            <path d={`M ${CX - 5} ${CY} L ${CX} ${CY - R + 6} L ${CX + 5} ${CY} Z`} fill="#172025" />
+          </g>
+          <circle cx={CX} cy={CY} r="11" fill="#172025" />
+          <circle cx={CX} cy={CY} r="4" fill="#c5ad83" />
+        </>
+      ) : (
+        <text x={CX} y={CY - 8} fontSize="13" fill="#9a9da0" textAnchor="middle">Not scored</text>
       )}
-      <circle cx={CX} cy={CY} r="11" fill="#172025" />
-      <circle cx={CX} cy={CY} r="4" fill="#c5ad83" />
     </svg>
   );
 }

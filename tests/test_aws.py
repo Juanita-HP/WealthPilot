@@ -48,7 +48,7 @@ def test_sync_downloads_once(tmp_path):
     s3 = FakeS3()
     first = storage.sync_from_s3(s3, "bucket", "wealthpilot", tmp_path)
     second = storage.sync_from_s3(s3, "bucket", "wealthpilot", tmp_path)
-    assert sorted(first) == sorted(storage.DATA_FILES) and second == []
+    assert storage.DATA_FILES <= set(first) <= storage.DATA_FILES | storage.OPTIONAL_FILES and second == []
     assert all(k.startswith("wealthpilot/") for k in s3.downloads)
 
 

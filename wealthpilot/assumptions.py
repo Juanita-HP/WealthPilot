@@ -23,6 +23,7 @@ INFLATION = 0.021
 RETURNS = {
     "canadian_equity": 0.064,
     "us_equity": 0.066,             # guideline: U.S. and developed international equities
+    "international_equity": 0.066,  # same guideline line as U.S. equities (developed markets)
     "emerging_equity": 0.075,
     "fixed_income": 0.032,
     "short_term": 0.024,

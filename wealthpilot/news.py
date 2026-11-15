@@ -192,7 +192,8 @@ CATEGORY_CUES = [
     ("analyst_rating", r"\b(upgrade|downgrade|price target|rating|analyst|overweight|underweight|top pick)\b"),
     ("legal_regulatory", r"\b(sec|lawsuit|sues?|probe|investigation|regulator|antitrust|fine[ds]?|approval|attorney general|court)\b"),
     ("deal", r"\b(merger|acquisition|acquire|deal|buyout|takeover|stake)\b"),
-    ("management", r"\b(ceo|cfo|chief|board|appoints?|resigns?|exit|founder)\b"),
+    ("management", r"\b(ceo|cfo|chief|board|appoints?|resigns?|exit|founder|reinstate[ds]?|ousted|ouster|fired|"
+                   r"steps? down|departure|successor|leadership)\b"),
     ("macro", r"\b(fed|rates?|inflation|cpi|tariff|recession|bank of canada|jobs report|economy)\b"),
     ("esg_controversy", r"\b(emissions|climate|spill|pollution|labor|union|strike|safety|recall|scandal|controvers)\w*"),
     ("product", r"\b(launch|pre-orders?|product|model|chip|cybercab|robotaxi|ai|factory|plant|software)\b"),
@@ -203,8 +204,8 @@ NEG = re.compile(r"\b(miss|plunge|slump|fall|fell|cut|lawsuit|probe|recall|weak|
 
 
 class RuleClassifier:
-    """Offline baseline (version rules-v2): keyword cues, documented and deterministic."""
-    name = "rules-v2"
+    """Offline baseline (version rules-v3): keyword cues, documented and deterministic."""
+    name = "rules-v3"
 
     def classify(self, h: dict) -> Label:
         title = h["title"]
@@ -342,7 +343,7 @@ def digest(ticker: str, headlines: list[dict], classifier=None, as_of: str | Non
     key = lambda r: (-r["trust"], -r["label"]["importance"], r["published_at"])  # noqa: E731
     slim = lambda r: {"title": r["title"], "publisher": r["publisher"], "published_at": r["published_at"],  # noqa: E731
                       "trust": r["trust"], "type": r["label"]["type"], "category": r["label"]["category"],
-                      "importance": r["label"]["importance"], "link": r["link"]}
+                      "importance": r["label"]["importance"], "sentiment": r["label"]["sentiment"], "link": r["link"]}
     dates = sorted(r["published_at"] for r in rows)
     notes = ["Headlines only (no article bodies). Recent news from Yahoo Finance's search endpoint; "
              "the window is short and not a full history.",

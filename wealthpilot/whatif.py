@@ -60,7 +60,7 @@ def goal_conditions(profile: pf.InvestorProfile, g: GoalSpec, inflation_alt: flo
                                          else f"the goal's level would drop to {new} ({pf.LEVELS[new].name}).",
                                          "horizon"))
                     break
-    exp = pf.expected_return(level, profile.constraints.home_equity_share)["net"]
+    exp = pf.expected_return(level, profile.constraints.home_equity_share, split=profile.constraints.equity_split)["net"]
     real_base = (1 + exp) / (1 + pf.assumptions.INFLATION) - 1
     real_alt = (1 + exp) / (1 + inflation_alt) - 1
     out.append(Condition(g.name, f"If inflation averaged {inflation_alt:.1%} instead of {pf.assumptions.INFLATION:.1%}",

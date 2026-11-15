@@ -64,7 +64,7 @@ export default function Advocate() {
               <div className={"card challenge " + c.severity} key={c.code}>
                 <h3>{c.title}</h3>
                 <p>{c.claim}</p>
-                {c.counterpoint && <p className="muted"><b>Counterpoint:</b> {c.counterpoint}</p>}
+                {c.counterpoint && <p className="muted"><b>{c.code === "RECENT_NEWS" ? "Grain of salt:" : "Counterpoint:"}</b> {c.counterpoint}</p>}
                 <p><b>Question for you:</b> {c.question}</p>
               </div>
             ))}

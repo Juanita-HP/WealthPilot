@@ -193,10 +193,14 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
             "Attention is not evidence either way: popular stocks can keep rising. Facts from high-trust sources are "
             "listed separately: " + "; ".join(h["title"] for h in news_digest.get("top_descriptive", [])[:2]),
             "Is the interest in this stock coming from its results, or from what people say about it?"))
+    recent = recent_news_challenge(ticker, profile, prices, news_digest)
+    if recent:
+        rv.challenges.append(recent)
     news_exp = news_exposure_change(current, proposed, universe, macro_items or [])
     if news_exp:
         rv.challenges.append(Challenge(
-            "NEWS_EXPOSURE", "concentration on a current news factor", "warning" if news_exp["after"] >= 0.5 else "info",
+            "NEWS_EXPOSURE", "concentration on a current news factor",
+            "warning" if news_exp["after"] >= 0.5 and profile.level <= 3 else "info",
             f"With this change, the share of your portfolio directly exposed to {news_exp['factor_label'].lower()} "
             f"goes from {news_exp['before'] * 100:.0f}% to {news_exp['after'] * 100:.0f}%. This factor is in the news: "
             f"{news_exp['fact']}",
@@ -205,6 +209,61 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
             "share, the more the next announcement of the same kind will matter.",
             "Do you want the next announcement on this topic to affect this much of your money?"))
     return rv
+
+
+MATERIAL = {"management", "legal_regulatory", "earnings", "deal", "esg_controversy"}
+TRUSTED = 0.6          # wire services, major papers and established media
+UNSETTLED = 1.5        # last 10 trading days' volatility vs the past year's
+LEVEL_NAME = {1: "Conservative", 2: "Moderate", 3: "Balanced", 4: "Growth", 5: "Aggressive"}
+
+
+def recent_news_challenge(ticker: str, profile: InvestorProfile, prices: pd.DataFrame,
+                          news_digest: dict | None) -> Challenge | None:
+    """A warning about what is happening around the asset now, stronger for cautious profiles.
+
+    Two signals, both shown: material facts reported by trusted sources (leadership, legal, results, deals,
+    controversies) and how much more the price has moved over the last 10 trading days than over the past year.
+    News never say which way the price will go, so the warning is about uncertainty, and comes with its limits.
+    """
+    facts = []
+    if news_digest and news_digest.get("n", 0) > 0:
+        facts = [h for h in news_digest.get("top_descriptive", [])
+                 if h.get("trust", 0) >= TRUSTED and h.get("category") in MATERIAL and h.get("importance", 0) >= 3]
+    ratio = None
+    if ticker in prices:
+        r = prices[ticker].dropna().pct_change().dropna()
+        if len(r) > 260:
+            recent_vol, year_vol = float(r.iloc[-10:].std()), float(r.iloc[-260:].std())
+            ratio = recent_vol / year_vol if year_vol > 0 else None
+    unsettled = ratio is not None and ratio >= UNSETTLED
+    if not facts and not unsettled:
+        return None
+    level = profile.level
+    parts = []
+    if facts:
+        parts.append("Recent facts reported by trusted sources: " + "; ".join(
+            f"\"{h['title']}\" ({h['publisher']}, {h['published_at'][:10]})" for h in facts[:2]) + ".")
+    if ratio is not None:
+        parts.append(f"Over the last 10 trading days its price moved {ratio:.1f} times as much as over the past year"
+                     + (" (more unsettled than usual)." if unsettled else " (no unusual swings so far)."))
+    if level <= 2:
+        severity = "warning"
+        advice = (f"For a {LEVEL_NAME[level]} profile, this kind of uncertainty is what the plan tries to avoid: waiting "
+                  "until things settle, or keeping any position very small, is the prudent option.")
+    elif level == 3:
+        severity = "info"
+        advice = (f"For a {LEVEL_NAME[level]} profile, it is worth reading the original sources before acting and "
+                  "keeping the position within your single-holding limit.")
+    else:
+        severity = "info"
+        advice = (f"A {LEVEL_NAME[level]} profile can absorb this kind of swing; size the position knowingly.")
+    return Challenge(
+        "RECENT_NEWS", "acting on recent news", severity, " ".join(parts) + " " + advice,
+        {"facts": facts[:3], "volatility_ratio_10d_vs_1y": ratio, "level": level,
+         "classifier": (news_digest or {}).get("classifier")},
+        "These are headlines (their full text could not be read), news do not tell "
+        "which way the price will go, and markets often price them in within hours.",
+        "If the news turn out worse than they look today, would you still want this position?")
 
 
 NEWS_EXPOSURE_JUMP = 0.10   # +10 points of the portfolio directly exposed to a factor in the news

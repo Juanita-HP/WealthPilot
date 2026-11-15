@@ -31,6 +31,14 @@ BASE_CURRENCY = "CAD"
 FFILL_LIMIT = 5
 MONTHLY_SERIES = {"STATIC_TOTALCPICHANGE", "CPIAUCSL", "UNRATE", "V41690973", "CPIW"}
 EXTERNAL_DIR = DATA_DIR.parent / "external"
+# International stock funds added to the organizers' universe (scripts/fetch_international.py).
+EXTRA_UNIVERSE = EXTERNAL_DIR / "assets_universe_extra.csv"
+EXTRA_PRICES = EXTERNAL_DIR / "extra_prices.csv"
+
+
+def extra_available() -> bool:
+    """True when the international funds' prices were fetched (their metadata is always in the repository)."""
+    return EXTRA_UNIVERSE.exists() and EXTRA_PRICES.exists()
 
 
 def _path(name: str, data_dir: Path | None) -> Path:
@@ -44,12 +52,23 @@ def _path(name: str, data_dir: Path | None) -> Path:
 
 
 def load_universe(data_dir: Path | None = None) -> pd.DataFrame:
-    return pd.read_csv(_path("assets_universe.csv", data_dir)).set_index("ticker")
+    """Asset metadata; ``currency_exposure`` is the currency risk (listing currency unless a fund holds foreign assets)."""
+    u = pd.read_csv(_path("assets_universe.csv", data_dir))
+    if data_dir is None and extra_available():
+        extra = pd.read_csv(EXTRA_UNIVERSE)
+        u = pd.concat([u, extra[~extra["ticker"].isin(u["ticker"])]], ignore_index=True)
+    if "currency_exposure" not in u:
+        u["currency_exposure"] = u["currency"]
+    u["currency_exposure"] = u["currency_exposure"].fillna(u["currency"])
+    return u.set_index("ticker")
 
 
 def load_prices(field: str = "adj_close", data_dir: Path | None = None) -> pd.DataFrame:
     """Wide table (date x ticker) of one price field, in listing currency, unaligned."""
     p = pd.read_csv(_path("prices_daily.csv", data_dir), parse_dates=["date"])
+    if data_dir is None and extra_available():
+        extra = pd.read_csv(EXTRA_PRICES, parse_dates=["date"])
+        p = pd.concat([p, extra[~extra["ticker"].isin(p["ticker"].unique())]], ignore_index=True)
     return p.pivot(index="date", columns="ticker", values=field).sort_index()
 
 

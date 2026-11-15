@@ -214,7 +214,8 @@ CHALLENGE_TITLE = {"SINGLE_SECURITY": "Too large for a single stock", "EQUITY_AB
                    "RISK_JUMP": "Risk rises sharply", "HORIZON_MISMATCH": "Too slow to recover for your horizon",
                    "RECENCY_BIAS": "Recency bias", "HIDDEN_CONCENTRATION": "Less diversified than it looks",
                    "HOME_BIAS": "Home bias", "HYPE": "Lots of media noise",
-                   "NEWS_EXPOSURE": "Dependence on a topic in the news", "GOLD_ABOVE_LIMIT": "Too much gold",
+                   "NEWS_EXPOSURE": "Dependence on a topic in the news",
+                   "RECENT_NEWS": "Recent news: read with a grain of salt", "GOLD_ABOVE_LIMIT": "Too much gold",
                    "EQUITY_BELOW_RANGE": "Few stocks for your level"}
 VERDICT = {"reconsider": ("red", "Reconsider"), "proceed with care": ("yellow", "Proceed with care"),
            "no major objection": ("green", "No major objection")}
@@ -222,7 +223,7 @@ STRATEGY_LABEL = {"ma_crossover": "Moving-average crossover", "rsi": "RSI (buy t
                   "macd": "MACD (momentum)", "breakout": "Breakout to new highs"}
 ESG = {"none": "No preference", "prefer": "I prefer responsible investments", "exclude": "I require responsible investments"}
 CRYPTO = {"no": "No", "small": "A little", "open": "Yes, if my profile allows it"}
-REGION = {"canada": "Mostly Canada", "balanced": "Balanced Canada / U.S.", "us": "Mostly the U.S.", "global": "Global"}
+REGION = {"canada": "Mostly Canada", "balanced": "Balanced", "us": "Mostly the U.S.", "global": "Global (the whole world)"}
 RANGES = {"A": (0.04, -0.02), "B": (0.08, -0.08), "C": (0.14, -0.18), "D": (0.22, -0.32)}
 
 
@@ -253,6 +254,15 @@ def risk_text(r) -> str:
                           "No single company dominates: risk is spread across broad funds."),
         "inflation": f"Assumed real return of about {pct(v, 1)} a year after inflation (assumption).",
     }.get(r.kind, r.reason)
+
+
+# Funds have no statements to measure: their gauge places the planning assumption of their market between the
+# lowest and the highest assumptions of the FP Canada / IFP guidelines.
+LOW_R, HIGH_R = pf.assumptions.RETURNS["short_term"], pf.assumptions.RETURNS["emerging_equity"]
+
+
+def assumption_score(annual_return: float) -> float:
+    return round(100 * min(1.0, max(0.0, (annual_return - LOW_R) / (HIGH_R - LOW_R))), 1)
 
 
 def fit_sentence(fit: dict, risk: dict) -> str:
@@ -504,7 +514,9 @@ def insights(symbol: str, user: str = Depends(current_user)):
             pot_text = potential_sentence(pot)
         elif lra:
             pot_text = (f"Diversified fund: its potential is its market's. Long-run assumption "
-                        f"{pct(lra['annual_return'], 1)} a year ({lra['source']}), not a forecast.")
+                        f"{pct(lra['annual_return'], 1)} a year ({lra['source']}), not a forecast. The needle places it "
+                        f"between the lowest assumption ({pct(LOW_R, 1)}, short-term deposits) and the highest "
+                        f"({pct(HIGH_R, 1)}, emerging-market stocks).")
         elif pot["label"] == "Not applicable":
             pot_text = "Not assessable: no financial statements and no recognized assumption for this asset."
         else:
@@ -516,6 +528,7 @@ def insights(symbol: str, user: str = Depends(current_user)):
                     "zones": [{"from": 0, "to": 40, "tone": "red"}, {"from": 40, "to": 70, "tone": "yellow"},
                               {"from": 70, "to": 100, "tone": "green"}]},
             "potential": {**pot, "sentence": pot_text, "long_run_assumption": lra,
+                          "assumption_score": assumption_score(lra["annual_return"]) if lra else None,
                           "zones": [{"from": 0, "to": 45, "tone": "red"}, {"from": 45, "to": 70, "tone": "yellow"},
                                     {"from": 70, "to": 100, "tone": "green"}]},
             "factor_labels": FACTOR_LABEL,

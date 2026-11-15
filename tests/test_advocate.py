@@ -69,3 +69,27 @@ def test_system_critiques_its_own_allocation():
     rv = adv.review_allocation(st.policy_allocation(ami, px).weights, ami, px, u)
     assert "HIDDEN_CONCENTRATION" in codes(rv)          # QQQ and SPY
     assert not any(c.severity == "warning" for c in rv.challenges)  # but within the profile
+
+
+@requires_starter
+def test_recent_news_warning_scales_with_the_profile():
+    from wealthpilot import data
+    px = data.load_prices_cad()
+    digest = {"n": 6, "classifier": "rules-v3", "top_descriptive": [
+        {"title": "Board ousts the CEO", "publisher": "Reuters", "published_at": "2026-11-13T12:00:00+00:00",
+         "trust": 0.85, "category": "management", "importance": 3},
+        {"title": "Blog post about the stock", "publisher": "Some blog", "published_at": "2026-11-13T12:00:00+00:00",
+         "trust": 0.3, "category": "management", "importance": 3}]}
+    cautious = adv.recent_news_challenge("NVDA", pf.build_profile(ROBERT), px, digest)
+    bold = adv.recent_news_challenge("NVDA", pf.with_level(pf.build_profile(AMIRA), 4, "t") if pf.build_profile(AMIRA).level >= 4
+                                     else pf.build_profile(AMIRA), px, digest)
+    assert cautious.severity == "warning" and "prudent" in cautious.claim
+    assert "Board ousts the CEO" in cautious.claim and "Blog post" not in cautious.claim, "low-trust sources are left out"
+    assert "headlines" in cautious.counterpoint and "which way" in cautious.counterpoint
+    assert bold.claim != cautious.claim
+
+
+def test_no_recent_news_warning_without_signal():
+    idx = pd.bdate_range("2024-01-01", periods=400)
+    calm = pd.DataFrame({"AAA": 100 * np.cumprod(1 + np.full(400, 0.0005) + np.random.default_rng(1).normal(0, 0.01, 400))}, index=idx)
+    assert adv.recent_news_challenge("AAA", pf.build_profile(ROBERT), calm, {"n": 0}) is None

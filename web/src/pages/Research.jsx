@@ -118,12 +118,12 @@ function useQuote(ticker) {
   return state;
 }
 
-function ScoreCard({ kicker, title, score, label, sentence, zones, names, note, fallback }) {
+function ScoreCard({ kicker, title, score, label, sentence, zones, names, note, fallback, needle }) {
   return (
     <div className="score-card">
       <div className="kicker">{kicker}</div>
       <h3>{title}</h3>
-      <Gauge score={score} zones={zones} label={title} />
+      <Gauge score={needle ?? score} zones={zones} label={title} />
       <div className="gauge-value">
         {num(score) ? <><strong>{Math.round(score)}</strong><span>/ 100</span></> : <strong>{fallback || "—"}</strong>}
       </div>
@@ -239,8 +239,11 @@ export default function Research({ symbol }) {
               <ScoreCard kicker="Unbiased potential" title="Measured growth" score={ins.potential.score}
                          label={ins.potential.long_run_assumption ? "Diversified fund" : ins.potential.label}
                          fallback={ins.potential.long_run_assumption ? pct(ins.potential.long_run_assumption.annual_return, 1) + " / yr" : "—"}
+                         needle={ins.potential.score ?? ins.potential.assumption_score}
                          sentence={ins.potential.sentence} zones={ins.potential.zones} names={["Weak", "Moderate", "Strong"]}
-                         note="Measured data only: no analyst opinions, no news, not your profile." />
+                         note={ins.potential.score == null && ins.potential.long_run_assumption
+                           ? "Planning assumption for the fund's market (FP Canada / IFP 2026): not a forecast, not your profile."
+                           : "Measured data only: no analyst opinions, no news, not your profile."} />
             </div>
             <div className="analysis-grid">
               <div className="analysis-stat"><span>Annualized volatility</span><strong>{pct(ins.stats.volatility, 1)}</strong></div>
