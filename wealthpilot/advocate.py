@@ -197,13 +197,13 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
     if news_exp:
         rv.challenges.append(Challenge(
             "NEWS_EXPOSURE", "concentration on a current news factor", "warning" if news_exp["after"] >= 0.5 else "info",
-            f"Avec ce changement, la part de votre portefeuille directement exposée au facteur "
-            f"« {news_exp['factor_fr']} » passe de {news_exp['before'] * 100:.0f} % à {news_exp['after'] * 100:.0f} %. "
-            f"Ce facteur est dans l'actualité : {news_exp['fact']}",
+            f"With this change, the share of your portfolio directly exposed to {news_exp['factor_label'].lower()} "
+            f"goes from {news_exp['before'] * 100:.0f}% to {news_exp['after'] * 100:.0f}%. This factor is in the news: "
+            f"{news_exp['fact']}",
             news_exp,
-            "Une nouvelle ne dit pas dans quel sens le marché va bouger; elle dit seulement ce qui va faire bouger "
-            "votre argent. Plus la part exposée est grande, plus la prochaine nouvelle du même type comptera.",
-            "Voulez-vous que la prochaine annonce sur ce sujet touche autant de votre argent ?"))
+            "News do not say which way markets will move; they say what will move your money. The larger the exposed "
+            "share, the more the next announcement of the same kind will matter.",
+            "Do you want the next announcement on this topic to affect this much of your money?"))
     return rv
 
 
@@ -223,8 +223,8 @@ def news_exposure_change(current: dict[str, float], proposed: dict[str, float], 
         before = mn.exposure(current, universe, f, it["region"])["share_direct"]
         after = mn.exposure(proposed, universe, f, it["region"])["share_direct"]
         if after - before >= NEWS_EXPOSURE_JUMP and (best is None or after - before > best["after"] - best["before"]):
-            best = {"factor": f, "factor_fr": mn.FACTOR_FR[f], "region": it["region"], "before": before,
-                    "after": after, "fact": mn.fact_fr(it), "source": it["publisher"], "date": it["published_at"][:10],
+            best = {"factor": f, "factor_label": mn.FACTOR_LABEL[f], "region": it["region"], "before": before,
+                    "after": after, "fact": mn.fact(it), "source": it["publisher"], "date": it["published_at"][:10],
                     "link": it["link"]}
     return best
 

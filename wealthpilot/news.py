@@ -382,19 +382,19 @@ def read_texts(headlines: list[dict], fetcher=None, max_fetch: int = 5) -> dict:
     for h in headlines:
         link = h.get("link") or ""
         if not link:
-            rows.append({"id": h["id"], "status": "too_short", "status_fr": webtext.STATUS_FR["too_short"]})
+            rows.append({"id": h["id"], "status": "too_short", "status_label": webtext.STATUS_TEXT["too_short"]})
             continue
         ok, why = fetcher.allowed(webtext.normalize(link))
         if not ok:
-            rows.append({"id": h["id"], "status": "robots_disallow", "status_fr": webtext.STATUS_FR["robots_disallow"],
+            rows.append({"id": h["id"], "status": "robots_disallow", "status_label": webtext.STATUS_TEXT["robots_disallow"],
                          "reason": why})
             continue
         if fetched >= max_fetch:
-            rows.append({"id": h["id"], "status": "not_attempted", "status_fr": "non lu (limite par recherche)"})
+            rows.append({"id": h["id"], "status": "not_attempted", "status_label": "not read (per-search limit)"})
             continue
         page = fetcher.get(link)
         fetched += 1
-        row = {"id": h["id"], "status": page.status, "status_fr": page.status_fr, "reason": page.reason}
+        row = {"id": h["id"], "status": page.status, "status_label": page.status_label, "reason": page.reason}
         if page.ok:
             sents = macro_news.sentences(page.text)
             words = NAME_KEYWORDS.get(h.get("ticker", ""), []) + [h.get("ticker", "").split(".")[0]]
@@ -409,7 +409,7 @@ def read_texts(headlines: list[dict], fetcher=None, max_fetch: int = 5) -> dict:
     blocked = sum(r["status"] == "robots_disallow" for r in rows)
     hosts = sorted({re.sub(r"^https?://([^/]+).*$", r"\1", h.get("link") or "") for h in headlines
                     if h.get("link")})
-    note = (f"Texte lu pour {read} des {n} articles."
-            + (f" {blocked} ne peuvent pas l'être : le site ({', '.join(hosts)}) n'autorise pas l'analyse "
-               "automatique par IA. Ces manchettes restent du contexte et ne servent pas de preuve." if blocked else ""))
+    note = (f"Article text read for {read} of {n} headlines."
+            + (f" {blocked} cannot be read: the site ({', '.join(hosts)}) does not allow automated analysis by AI "
+               "agents. These headlines are context only, never evidence." if blocked else ""))
     return {"rows": rows, "n": n, "read": read, "blocked": blocked, "note": note}

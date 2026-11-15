@@ -214,11 +214,11 @@ LEVELS = {
 }
 # Display, in the style of Canadian robo-advisors (Wealthsimple shows a named profile and a score out of 10).
 LEVEL_CARDS = {
-    1: {"fr": "Prudent", "score_10": 2, "for": "short horizons, little comfort with swings, or money needed soon"},
-    2: {"fr": "Modéré", "score_10": 4, "for": "near retirement or medium horizons with a focus on stability"},
-    3: {"fr": "Équilibré", "score_10": 6, "for": "medium to long horizons, balance between growth and stability"},
-    4: {"fr": "Croissance", "score_10": 8, "for": "long horizons and comfort with sizeable temporary losses"},
-    5: {"fr": "Audacieux", "score_10": 10, "for": "very long horizons, high capacity AND high tolerance"},
+    1: {"name": "Conservative", "score_10": 2, "for": "short horizons, little comfort with swings, or money needed soon"},
+    2: {"name": "Moderate", "score_10": 4, "for": "near retirement or medium horizons with a focus on stability"},
+    3: {"name": "Balanced", "score_10": 6, "for": "medium to long horizons, balance between growth and stability"},
+    4: {"name": "Growth", "score_10": 8, "for": "long horizons and comfort with sizeable temporary losses"},
+    5: {"name": "Aggressive", "score_10": 10, "for": "very long horizons, high capacity AND high tolerance"},
 }
 
 

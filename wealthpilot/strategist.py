@@ -51,21 +51,21 @@ CRYPTO_STRATEGIC_SHARE = 0.5  # use half of the crypto limit, never all of it
 # diversified core: they become small "satellite" positions taken from the stock sleeve, within the
 # single-security limit, the sector limit and the investor's exclusions.
 THEMES = {
-    "tech_ai": ("Technologie et IA", ["QQQ"]),
-    "canadian_banks": ("Banques canadiennes", ["RY.TO", "TD.TO"]),
-    "dividends": ("Dividendes et revenu", ["FTS.TO", "ENB.TO", "JNJ", "PG"]),
-    "energy": ("Énergie et ressources", ["CNQ.TO", "XOM", "ENB.TO"]),
-    "health": ("Santé", ["JNJ"]),
-    "consumer": ("Consommation de base", ["PG", "ATD.TO"]),
-    "ecommerce": ("Commerce en ligne", ["AMZN", "SHOP.TO"]),
-    "software_ca": ("Logiciels canadiens", ["CSU.TO", "SHOP.TO"]),
-    "megacap_tech": ("Géants technologiques américains", ["MSFT", "AAPL", "GOOGL", "NVDA"]),
-    "ev_mobility": ("Véhicules électriques", ["TSLA"]),
-    "infrastructure": ("Infrastructures et transport", ["CNR.TO", "FTS.TO"]),
-    "insurance": ("Assurance", ["MFC.TO"]),
-    "gold": ("Or et valeurs refuges", ["GLD"]),
-    "crypto": ("Cryptoactifs", ["BTC-USD"]),
-    "esg": ("Investissement responsable (ESG)", ["ESGV"]),
+    "tech_ai": ("Technology and AI", ["QQQ"]),
+    "canadian_banks": ("Canadian banks", ["RY.TO", "TD.TO"]),
+    "dividends": ("Dividends and income", ["FTS.TO", "ENB.TO", "JNJ", "PG"]),
+    "energy": ("Energy and resources", ["CNQ.TO", "XOM", "ENB.TO"]),
+    "health": ("Health care", ["JNJ"]),
+    "consumer": ("Consumer staples", ["PG", "ATD.TO"]),
+    "ecommerce": ("E-commerce", ["AMZN", "SHOP.TO"]),
+    "software_ca": ("Canadian software", ["CSU.TO", "SHOP.TO"]),
+    "megacap_tech": ("U.S. tech giants", ["MSFT", "AAPL", "GOOGL", "NVDA"]),
+    "ev_mobility": ("Electric vehicles", ["TSLA"]),
+    "infrastructure": ("Infrastructure and transport", ["CNR.TO", "FTS.TO"]),
+    "insurance": ("Insurance", ["MFC.TO"]),
+    "gold": ("Gold and safe havens", ["GLD"]),
+    "crypto": ("Crypto assets", ["BTC-USD"]),
+    "esg": ("Responsible investing (ESG)", ["ESGV"]),
 }
 THEME_ALIASES = {"Information Technology": "tech_ai"}
 SATELLITE_SHARE = {1: 0.0, 2: 0.05, 3: 0.10, 4: 0.15, 5: 0.20}  # of the stock sleeve

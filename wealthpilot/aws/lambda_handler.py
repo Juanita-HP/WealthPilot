@@ -1,6 +1,6 @@
 """AWS Lambda entry point.
 
-The UI (Streamlit or web) invokes this function with IAM credentials (no public
+The UI (React, through the API) invokes this function with IAM credentials (no public
 endpoint). Event:
 
     {"session_id": "abc", "question": "...",
