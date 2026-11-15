@@ -96,7 +96,7 @@ export default function Auth({ onSignedIn }) {
           </button>
           <button type="button" className="choice" disabled={busy} onClick={() => demoSignIn("Robert")}>
             <strong>Robert · 59 yrs</strong>
-            <small>Moderate goal cap (4/10 risk) · $140k income · Retirement in 4 yrs · Capital preservation</small>
+            <small>Balanced (6/10 risk), retirement goal capped at Moderate · $140k income · Retirement in 4 yrs · Capital preservation</small>
           </button>
         </div>
       </div>

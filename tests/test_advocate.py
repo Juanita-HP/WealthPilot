@@ -83,7 +83,7 @@ def test_recent_news_warning_scales_with_the_profile():
     cautious = adv.recent_news_challenge("NVDA", pf.build_profile(ROBERT), px, digest)
     bold = adv.recent_news_challenge("NVDA", pf.with_level(pf.build_profile(AMIRA), 4, "t") if pf.build_profile(AMIRA).level >= 4
                                      else pf.build_profile(AMIRA), px, digest)
-    assert cautious.severity == "warning" and "prudent" in cautious.claim
+    assert cautious.severity == "warning" and "very small" in cautious.claim and "until things settle" not in cautious.claim
     assert "Board ousts the CEO" in cautious.claim and "Blog post" not in cautious.claim, "low-trust sources are left out"
     assert "headlines" in cautious.counterpoint and "which way" in cautious.counterpoint
     assert bold.claim != cautious.claim
@@ -107,3 +107,33 @@ def test_esg_controversy_only_for_investors_with_esg_preferences():
     assert c.severity == "warning" and "3 of the 8" in c.claim and "Pipeline spill" in c.claim and "ESGV" in c.counterpoint
     assert adv.esg_controversy_challenge(prefer, digest, u).severity == "info"
     assert adv.esg_controversy_challenge(strict, {"n": 5, "by_category": {}, "controversies": []}, u) is None
+
+
+@requires_starter
+def test_trade_review_only_talks_about_this_trade():
+    from wealthpilot import data, goals as gl, onboarding as ob
+    px, u = data.load_prices_cad(), data.load_universe()
+    o = ob.PERSONAS["Amira"]
+    p = ob.build_profile(o)
+    plan = gl.plan(p, o.goals, px)
+    eff, w = gl.effective_profile(p, plan), plan.total_weights
+    assert {"QQQ", "SPY"} <= set(w), "the persona's plan holds both funds"
+    aapl = adv.review_trade("AAPL", 0.03, w, eff, px, u)
+    assert "HIDDEN_CONCENTRATION" not in codes(aapl), "the QQQ/SPY pair is about the plan, not about AAPL"
+    owned = next(c for c in aapl.challenges if c.code == "ALREADY_OWNED")
+    assert "SPY" in owned.claim and "QQQ" in owned.claim
+    fund = adv.review_trade("XIU.TO", 0.10, w, eff, px, u)
+    assert "RECENT_NEWS" not in codes(fund), "no news-timing advice on a diversified fund"
+    more_qqq = adv.review_trade("QQQ", 0.20, w, eff, px, u)
+    assert "HIDDEN_CONCENTRATION" in codes(more_qqq), "the pair involves the asset asked about"
+
+
+@requires_starter
+def test_holding_already_in_the_plan_is_a_note_not_a_warning():
+    from wealthpilot import data, goals as gl, onboarding as ob
+    px, u = data.load_prices_cad(), data.load_universe()
+    o = ob.PERSONAS["Robert"]
+    p = ob.build_profile(o)
+    plan = gl.plan(p, o.goals, px)
+    rv = adv.review_trade("XBB.TO", 0.10, plan.total_weights, gl.effective_profile(p, plan), px, u)
+    assert all(c.severity == "info" for c in rv.challenges) and rv.verdict != "reconsider"

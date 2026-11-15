@@ -140,6 +140,50 @@ def review_allocation(proposed: dict[str, float], profile: InvestorProfile, pric
     return Review(subject, challenges, before_after)
 
 
+# Index funds of the universe and the stocks of the universe they hold (index membership, November 2026).
+INDEX_MEMBERS = {
+    "SPY": {"AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "TSLA", "JPM", "JNJ", "PG", "XOM"},
+    "ESGV": {"AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "TSLA", "JPM", "JNJ", "PG"},     # screened: no oil producers
+    "QQQ": {"AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "TSLA"},
+    "XIU.TO": {"RY.TO", "TD.TO", "MFC.TO", "ENB.TO", "CNQ.TO", "CNR.TO", "FTS.TO", "ATD.TO", "SHOP.TO", "CSU.TO"},
+}
+
+
+def already_owned_challenge(ticker: str, current: dict[str, float], universe: pd.DataFrame) -> Challenge | None:
+    """A single stock the investor already owns through the index funds of the plan."""
+    funds = [f for f, members in INDEX_MEMBERS.items() if ticker in members and current.get(f, 0) > 0]
+    if not funds:
+        return None
+    names = " and ".join(f"{f} ({universe.loc[f, 'name']})" if f in universe.index else f for f in funds)
+    share = sum(current[f] for f in funds)
+    return Challenge(
+        "ALREADY_OWNED", "overlap with your index funds", "info",
+        f"You already own {ticker} through {names}, {share:.0%} of your plan: these index funds hold it, along with "
+        f"many other companies. Buying it directly adds to a position you already have.",
+        {"funds": funds, "funds_share": share},
+        "A direct position is a deliberate bet on one company; the index funds already give you its market weight.",
+        f"Do you want more {ticker} than the market already gives you?")
+
+
+def _about_this_trade(c: Challenge, ticker: str, current: dict[str, float], profile: InvestorProfile,
+                      prices: pd.DataFrame, universe: pd.DataFrame) -> bool:
+    """Keep a portfolio-level challenge only if this trade causes it or is part of it.
+
+    Without this filter, every review repeated remarks about the plan itself (for example two funds of the plan that
+    move together), whatever the stock the investor asked about.
+    """
+    if ticker in c.claim:
+        return True
+    if c.code == "HIDDEN_CONCENTRATION":
+        return False                                    # a pair that does not involve this asset
+    if c.code == "HOME_BIAS":
+        return universe.loc[ticker, "currency"] == "CAD" and universe.loc[ticker, "asset_class"] in {"equity", "etf_equity"}
+    if c.code == "RISK_JUMP":
+        return True                                     # computed before vs after this trade
+    before = {v.code for v in check_allocation(current, profile, universe, prices) if v.severity == "warning"}
+    return c.code not in before                        # a limit this trade breaks, not one the plan already breaks
+
+
 # Share of headlines that are forecasts/opinions from low-trust sources. At 0.5 the challenge never fired for
 # NVDA (0.40), SPY (0.45) or TSLA (0.31) while it did for PG (0.54): 0.30 catches the stocks in the spotlight.
 HYPE_SHARE = 0.30
@@ -159,6 +203,12 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
     proposed = {t: w * (1 - weight) for t, w in current.items() if t != ticker}
     proposed[ticker] = weight + current.get(ticker, 0.0) * (1 - weight)
     rv = review_allocation(proposed, profile, prices, universe, current, subject=f"{weight:.0%} in {ticker}")
+    rv.challenges = [c for c in rv.challenges if _about_this_trade(c, ticker, current, profile, prices, universe)]
+    in_plan = current.get(ticker, 0.0) > 0
+    owned = already_owned_challenge(ticker, current, universe)
+    if owned:
+        rv.challenges.append(owned)
+    asset_class = universe.loc[ticker, "asset_class"]
 
     s = prices[ticker].dropna()
     one_year = float(s.iloc[-1] / s.loc[: s.index[-1] - pd.DateOffset(years=1)].iloc[-1] - 1)
@@ -176,9 +226,11 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
     recovered = ep["recovery_date"]
     days = ((recovered or s.index[-1]) - ep["peak_date"]).days
     if days / 365.25 > horizon_years / 2:
+        # A holding the plan already chose for this horizon is balanced by the rest of the plan: a note, not a warning.
         rv.challenges.append(Challenge(
-            "HORIZON_MISMATCH", "horizon mismatch", "warning",
-            f"{ticker} fell {-ep['drawdown']:.0%} from {ep['peak_date'].date()} and took "
+            "HORIZON_MISMATCH", "horizon mismatch", "info" if in_plan else "warning",
+            ("Already part of your plan, which balances it with other holdings. " if in_plan else "")
+            + f"{ticker} fell {-ep['drawdown']:.0%} from {ep['peak_date'].date()} and took "
             + (f"{days / 365.25:.1f} years to recover" if recovered is not None else
                f"{days / 365.25:.1f} years without recovering")
             + f", against a horizon of about {horizon_years:g} years.",
@@ -198,7 +250,10 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
     esg = esg_controversy_challenge(profile, news_digest, universe)
     if esg:
         rv.challenges.append(esg)
-    recent = recent_news_challenge(ticker, profile, prices, news_digest)
+    # Recent news and swings matter for single companies and crypto; for a diversified fund, reacting to them would be
+    # market timing, which the plan advises against.
+    recent = (recent_news_challenge(ticker, profile, prices, news_digest)
+              if asset_class in {"equity", "crypto"} else None)
     if recent:
         rv.challenges.append(recent)
     news_exp = news_exposure_change(current, proposed, universe, macro_items or [])
@@ -279,8 +334,8 @@ def recent_news_challenge(ticker: str, profile: InvestorProfile, prices: pd.Data
                      + (" (more unsettled than usual)." if unsettled else " (no unusual swings so far)."))
     if level <= 2:
         severity = "warning"
-        advice = (f"For a {LEVEL_NAME[level]} profile, this kind of uncertainty is what the plan tries to avoid: waiting "
-                  "until things settle, or keeping any position very small, is the prudent option.")
+        advice = (f"For a {LEVEL_NAME[level]} profile, this kind of uncertainty is what the plan tries to avoid: if you go "
+                  "ahead, keep the position very small, so that a bad surprise stays a small loss.")
     elif level == 3:
         severity = "info"
         advice = (f"For a {LEVEL_NAME[level]} profile, it is worth reading the original sources before acting and "
