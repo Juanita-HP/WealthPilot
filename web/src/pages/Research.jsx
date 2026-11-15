@@ -2,7 +2,7 @@
 // the explanation behind them, and recent news with their status (fact or opinion, text read or not).
 import { useEffect, useState } from "react";
 import { YAHOO, YAHOO2, api, candles, compact, fmt, getChart, getWatchlist, num, pct, requestJSON, saveWatchlist, signedPct, go } from "../lib.js";
-import StockChart from "../components/StockChart.jsx";
+import StockChart, { PERIOD_LABEL } from "../components/StockChart.jsx";
 import Gauge, { GaugeLegend } from "../components/Gauge.jsx";
 
 const METRICS = [["openingPrice", "Opening price"], ["closingPrice", "Previous close"], ["tradingVolume", "Trading volume"],
@@ -156,6 +156,22 @@ function ModelBlock({ model }) {
   );
 }
 
+// Change shown under the price: follows the chart's timeframe (1D: today's change vs the previous close).
+function PeriodChange({ quote, period }) {
+  if (!period || period.range === "1d" || !num(period.base) || !period.base) {
+    return <div className={"change " + (quote.change ? (quote.change.up ? "up" : "down") : "")}>
+      {quote.change ? quote.change.text + " today" : ""}</div>;
+  }
+  const last = num(quote.price) ? quote.price : period.last;
+  const diff = last - period.base, sign = diff > 0 ? "+" : "";
+  const money = v => fmt(v) + (quote.currency ? " " + quote.currency : "");
+  return (
+    <div className={"change " + (diff >= 0 ? "up" : "down")}>
+      {sign + money(diff) + " (" + sign + (diff / period.base * 100).toFixed(2) + "%) " + PERIOD_LABEL[period.range]}
+    </div>
+  );
+}
+
 function ScoreCard({ kicker, title, score, label, sentence, zones, names, note, fallback, needle, children }) {
   return (
     <div className="score-card">
@@ -199,6 +215,7 @@ export default function Research({ symbol }) {
   const [insError, setInsError] = useState("");
   const [newsData, setNewsData] = useState(null);
   const [open, setOpen] = useState(false);
+  const [period, setPeriod] = useState(null);
   const [saved, setSaved] = useState(getWatchlist().some(i => i.symbol === ticker));
 
   useEffect(() => {
@@ -234,11 +251,11 @@ export default function Research({ symbol }) {
       </div>
       <div className="symbol">{ticker}{quote.exchange ? " · " + quote.exchange : ""}</div>
       <div className="price">{num(quote.price) ? fmt(quote.price) + (quote.currency ? " " + quote.currency : "") : quote.error ? "Unavailable" : "Loading..."}</div>
-      <div className={"change " + (quote.change ? (quote.change.up ? "up" : "down") : "")}>{quote.change?.text || ""}</div>
+      <PeriodChange quote={quote} period={period} />
       <div className="timestamp">{quote.time}</div>
 
       <div className="research-layout">
-        <StockChart ticker={ticker} currency={quote.currency} />
+        <StockChart ticker={ticker} currency={quote.currency} onPeriod={setPeriod} />
         <aside className="fundamentals">
           {METRICS.map(([key, label]) => {
             const m = quote.metrics[key];
