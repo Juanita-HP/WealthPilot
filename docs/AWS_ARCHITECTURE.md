@@ -3,14 +3,14 @@
 **PolyFinances Datathon 2026 · Architecture map · Educational investment simulation**
 
 **Live application:** https://d3pmr84q14pg9z.cloudfront.net/  
-**Primary AWS region:** \`us-east-1\`  
+**Primary AWS region:** `us-east-1`  
 **Scope:** Hosting, API, explainable AI, data storage, auditability and model training.
 
 ## 1. AWS service map
 
 The diagram shows **where each AWS service fits in the user-facing application**. The Advisor, Devil's Advocate and deterministic Verifier are **application components**; Bedrock provides models, while the orchestration and verification code execute in Lambda.
 
-\`\`\`mermaid
+```mermaid
 flowchart TB
     USER["Investor<br/>Web browser"]
 
@@ -41,11 +41,11 @@ flowchart TB
     class CF,API,BEDROCK primary
     class SITE,DATA,USERS,AUDIT storage
     class LOG observer
-\`\`\`
+```
 
 ### How one investor request is handled
 
-1. **CloudFront** serves the React interface from a **private S3 website bucket**. Requests to \`/api/*\` go to a Lambda Function URL, which hosts the **FastAPI** backend through **Mangum**.
+1. **CloudFront** serves the React interface from a **private S3 website bucket**. Requests to `/api/*` go to a Lambda Function URL, which hosts the **FastAPI** backend through **Mangum**.
 2. **Lambda** retrieves investor context from **DynamoDB**, reads the necessary data and published model files from **S3**, and runs Python-based financial calculations.
 3. **Amazon Bedrock** powers the **Advisor** and **Devil's Advocate**. They interpret evidence and challenge assumptions; the Python **Verifier** checks numerical statements against tool-generated calculation receipts.
 4. **DynamoDB** stores session/audit records, including receipts and verification results. **CloudWatch** provides operational logs.
@@ -56,7 +56,7 @@ flowchart TB
 
 The platform separates **model retraining** from **production use**. Training candidates do not automatically replace the live models.
 
-\`\`\`mermaid
+```mermaid
 flowchart LR
     SCHED["Amazon EventBridge Scheduler<br/>Monthly schedule configured"]
     MANUAL["Manual AWS CloudShell<br/>train_aws.sh"]
@@ -81,11 +81,11 @@ flowchart LR
     classDef storage fill:#ffffff,stroke:#d5a027,color:#171717,stroke-width:1.5px
     class SCHED,LAUNCH,SM,API primary
     class INPUT,CAND,LIVE storage
-\`\`\`
+```
 
 - **SageMaker Training Jobs** retrain the inflation, asset forecasting and market-timing models using time-aware evaluation. The jobs write **candidate** artifacts and metrics to S3.
 - **EventBridge Scheduler** is configured for a monthly trigger; the team can also start training on demand.
-- **Human approval** is required before \`scripts/promote_models.sh\` publishes a candidate to the live model location in S3. There is **no always-on SageMaker inference endpoint**; model artifacts are loaded by the Python API.
+- **Human approval** is required before `scripts/promote_models.sh` publishes a candidate to the live model location in S3. There is **no always-on SageMaker inference endpoint**; model artifacts are loaded by the Python API.
 
 ## 3. AWS services and their responsibilities
 
@@ -104,7 +104,7 @@ flowchart LR
 ## 4. Security, governance and limitations
 
 - **Private website origin:** CloudFront reads the private S3 site bucket through **Origin Access Control**. The browser does not receive unrestricted access to the bucket.
-- **API access:** the Lambda Function URL is configured with \`AuthType: NONE\` and is routed through CloudFront. It is **not private by virtue of CloudFront**; protected user operations use application-level signed authentication.
+- **API access:** the Lambda Function URL is configured with `AuthType: NONE` and is routed through CloudFront. It is **not private by virtue of CloudFront**; protected user operations use application-level signed authentication.
 - **IAM permissions:** Lambda receives the permissions required to read S3, use the relevant DynamoDB tables and invoke Bedrock. No AWS access keys should be stored in the repository.
 - **Financial accountability:** calculated values and agent claims are checked against traceable receipts; forecasts, assumptions and historical observations remain clearly distinct.
 - **External data:** Yahoo Finance, the Bank of Canada and FRED are **data providers**, not AWS services. The Jupyter EDA report is research evidence, **not** a claim that EDA runs inside SageMaker.
