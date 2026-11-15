@@ -114,21 +114,21 @@ def parse_feed(xml: str | bytes, feed: dict) -> list[FeedItem]:
 # ----------------------------------------------------------------------------- text analysis
 
 FACTORS = {
-    "rates": ("Taux d'intérêt", r"\b(policy rate|overnight rate|federal funds|interest rates?|bond yields?|yields|"
+    "rates": ("Interest rates", r"\b(policy rate|overnight rate|federal funds|interest rates?|bond yields?|yields|"
                                 r"monetary policy|policy stance|basis points?|rate (cuts?|hikes?|increases?|decreases?)|"
                                 r"financial conditions)\b"),
     "inflation": ("Inflation", r"\b(inflation|consumer price index|CPI|price stability|cost pressures|"
                                r"prices? (rose|increased|fell|declined|were up|were down))\b"),
-    "currency": ("Devise ($ CA / $ US)", r"\b(Canadian dollar|U\.?S\.?[- ]dollar|exchange rates?|currenc(y|ies)|loonie)\b"),
-    "energy": ("Énergie et pétrole", r"\b(oil|gasoline|energy prices?|crude|petroleum|natural gas|refin\w*|fuel)\b"),
-    "growth": ("Croissance et emploi", r"\b(GDP|gross domestic product|economic activity|economy|recession|"
+    "currency": ("Currency (CAD / USD)", r"\b(Canadian dollar|U\.?S\.?[- ]dollar|exchange rates?|currenc(y|ies)|loonie)\b"),
+    "energy": ("Energy and oil", r"\b(oil|gasoline|energy prices?|crude|petroleum|natural gas|refin\w*|fuel)\b"),
+    "growth": ("Growth and jobs", r"\b(GDP|gross domestic product|economic activity|economy|recession|"
                                        r"unemployment|employment|jobs?|labou?r market|consumer spending|"
                                        r"excess supply|business investment|retail sales)\b"),
-    "trade": ("Commerce et géopolitique", r"\b(tariffs?|trade (relations|war|policy|tensions|environment)|exports?|"
+    "trade": ("Trade and geopolitics", r"\b(tariffs?|trade (relations|war|policy|tensions|environment)|exports?|"
                                          r"imports?|sanctions|geopolitic\w*|conflict)\b"),
 }
 FACTOR_RX = {k: re.compile(v[1], re.I) for k, v in FACTORS.items()}
-FACTOR_FR = {k: v[0] for k, v in FACTORS.items()}
+FACTOR_LABEL = {k: v[0] for k, v in FACTORS.items()}
 
 FORWARD = re.compile(r"\b(expect\w*|project\w*|forecast\w*|outlook|will|anticipat\w*|likely|could|may|"
                      r"is set to|going forward|risks? to)\b", re.I)
@@ -169,8 +169,8 @@ DECISIONS = [
     ("gdp", re.compile(r"(?:Real gross domestic product \(GDP\)|Real GDP)\s+(rose|grew|fell|declined|contracted|"
                        r"edged up|edged down|was essentially unchanged|was unchanged)\s*([\d.]+)?%?", re.I)),
 ]
-DECISION_FR = {"policy_rate": "Taux directeur", "cpi": "Inflation (IPC)", "unemployment": "Taux de chômage",
-               "gdp": "PIB réel"}
+DECISION_LABEL = {"policy_rate": "Policy rate", "cpi": "Inflation (CPI)", "unemployment": "Unemployment rate",
+                  "gdp": "Real GDP"}
 DECISION_FACTOR = {"policy_rate": "rates", "cpi": "inflation", "unemployment": "growth", "gdp": "growth"}
 
 
@@ -217,7 +217,7 @@ def analyze_text(text: str, title: str = "") -> TextAnalysis:
         for s in sents:
             m = rx.search(s)
             if m:
-                decision = {"kind": kind, "label": DECISION_FR[kind], "direction": _direction(m.group(1)),
+                decision = {"kind": kind, "label": DECISION_LABEL[kind], "direction": _direction(m.group(1)),
                             "value": _num(m.group(2)) if m.lastindex and m.lastindex >= 2 and m.group(2) else None,
                             "sentence": s, "factor": DECISION_FACTOR[kind]}
                 break
@@ -240,7 +240,7 @@ def analyze_text(text: str, title: str = "") -> TextAnalysis:
                       and len(s.split()) >= 8] or hits
             with_number = [s for s in useful if re.search(r"\d", s)]
             quotes = (with_number + [s for s in useful if s not in with_number])[:2]
-            factors[f] = {"label": FACTOR_FR[f], "sentences": len(hits), "share": len(hits) / n,
+            factors[f] = {"label": FACTOR_LABEL[f], "sentences": len(hits), "share": len(hits) / n,
                           "quotes": [{"text": q, "kind": "forecast" if FORWARD.search(q) else "fact"} for q in quotes]}
     # Without a decision, a factor must come back in at least 3 sentences to be a topic of the text.
     need = 2 if decision else 3
@@ -306,7 +306,7 @@ class LLMTextAnalyzer:
         decision = None
         if x["decision_kind"] != "none":
             sent = next((q["text"] for q in quotes if q["kind"] == "fact"), "")
-            decision = {"kind": x["decision_kind"], "label": DECISION_FR[x["decision_kind"]],
+            decision = {"kind": x["decision_kind"], "label": DECISION_LABEL[x["decision_kind"]],
                         "direction": x["direction"] if x["direction"] != "none" else "unchanged",
                         "value": x["value"], "sentence": sent, "factor": DECISION_FACTOR[x["decision_kind"]]}
         return TextAnalysis(self.name, base.n_sentences, decision, base.factors, x["main_factors"][:3],
@@ -328,7 +328,7 @@ class MacroItem:
     link: str
     published_at: str
     text_status: str
-    text_status_fr: str
+    text_status_label: str
     text_chars: int
     analysis: dict
     retrieved_at: str
@@ -357,7 +357,7 @@ def collect(fetcher: webtext.Fetcher | None = None, days: int = 60, per_feed: in
             text = page.text if page.ok else it.summary
             a = analyze(text, it.title) if text else analyze_text("", it.title)
             out.append(MacroItem(webtext.normalize(it.link), it.source, it.publisher, it.region, it.title,
-                                 webtext.normalize(it.link), it.published_at, page.status, page.status_fr,
+                                 webtext.normalize(it.link), it.published_at, page.status, page.status_label,
                                  len(page.text), a.to_dict(), now))
     return out
 
@@ -369,7 +369,8 @@ def recent(max_age_hours: float = 12.0, **kw) -> list[dict]:
         rows = [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
         version = kw["analyzer"].name if kw.get("analyzer") is not None else ANALYZER_VERSION
         fresh = bool(rows) and datetime.fromisoformat(rows[0]["retrieved_at"]) > datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
-        if fresh and rows[0]["analysis"].get("analyzer") == version:  # rules changed: analyse again
+        # Analyse again when the rules or the stored fields changed.
+        if fresh and rows[0]["analysis"].get("analyzer") == version and "text_status_label" in rows[0]:
             return rows
     rows = [i.to_dict() for i in collect(**kw)]
     if rows:
@@ -390,47 +391,47 @@ def _channel(factor: str, region: str, row: pd.Series, ticker: str) -> tuple[str
     local = (region == "CA" and cur == "CAD") or (region == "US" and cur == "USD")
     if factor == "rates":
         if ac == "etf_bond" and ultra:
-            return "indirect", "Échéances très courtes : son rendement suit le taux, son prix bouge à peine."
+            return "indirect", "Very short maturities: its yield follows the policy rate and its price barely moves."
         if ac == "etf_bond":
             return ("direct" if local else "indirect",
-                    "Le prix d'une obligation baisse quand les taux montent, et monte quand ils baissent."
-                    + ("" if local else " Les taux des deux pays bougent souvent ensemble."))
+                    "A bond's price falls when rates rise, and rises when they fall."
+                    + ("" if local else " Canadian and U.S. rates often move together."))
         if ac in EQUITY and sector in ("Financials", "Utilities") and local:
-            return "indirect", "Secteur sensible aux taux (marges des banques, dette des services publics)."
+            return "indirect", "Rate-sensitive sector (bank margins, utility debt)."
         if ticker == "QQQ" and region == "US":
-            return "indirect", "Les titres de croissance sont sensibles aux taux d'actualisation."
+            return "indirect", "Growth stocks are sensitive to discount rates."
         return None
     if factor == "inflation":
         if ac == "etf_bond" and not ultra:
-            return "direct", "Coupons fixes : l'inflation réduit leur valeur réelle."
+            return "direct", "Fixed coupons: inflation reduces their real value."
         if ac == "etf_bond":
-            return "indirect", "Rendement proche du taux court : suit l'inflation avec retard."
+            return "indirect", "Yield close to short-term rates: follows inflation with a lag."
         if ac == "etf_commodity" or sector == "Energy":
-            return "indirect", "A souvent mieux résisté à l'inflation par le passé, sans garantie."
+            return "indirect", "Has often held up better against inflation in the past, with no guarantee."
         return None
     if factor == "currency":
         if cur == "USD":
-            return "direct", "Détenu en dollars américains : sa valeur en $ CA bouge avec le taux de change."
+            return "direct", "Held in U.S. dollars: its value in CAD moves with the exchange rate."
         return None
     if factor == "energy":
         if sector == "Energy":
-            return "direct", "Entreprise du secteur de l'énergie."
+            return "direct", "Energy-sector company."
         if ticker == "XIU.TO":
-            return "indirect", "L'énergie est un des plus gros secteurs de l'indice canadien."
+            return "indirect", "Energy is one of the largest sectors of the Canadian index."
         return None
     if factor == "growth":
         if ac in EQUITY and local:
-            return "direct", "Les profits des entreprises suivent l'activité économique du pays."
+            return "direct", "Company profits follow the country's economic activity."
         if ac == "etf_bond" and local and not ultra:
-            return "indirect", "Les obligations montent souvent quand la croissance ralentit (effet inverse)."
+            return "indirect", "Bonds often rise when growth slows (opposite effect)."
         if ac in EQUITY:
-            return "indirect", "Les économies canadienne et américaine sont liées."
+            return "indirect", "The Canadian and U.S. economies are linked."
         return None
     if factor == "trade":
         if ac in EQUITY and cur == "CAD":
-            return "direct", "Entreprises canadiennes, exposées au commerce avec les États-Unis."
+            return "direct", "Canadian companies, exposed to trade with the United States."
         if ac in EQUITY:
-            return "indirect", "Les tarifs touchent aussi les entreprises américaines (coûts, ventes)."
+            return "indirect", "Tariffs also affect U.S. companies (costs, sales)."
         return None
     return None
 
@@ -447,7 +448,7 @@ def exposure(weights: dict[str, float], universe: pd.DataFrame, factor: str, reg
     total = sum(w for w in weights.values() if w > 0) or 1.0
     d = sum(x["weight"] for x in lines if x["channel"] == "direct") / total
     i = sum(x["weight"] for x in lines if x["channel"] == "indirect") / total
-    return {"factor": factor, "label": FACTOR_FR[factor], "region": region, "lines": lines,
+    return {"factor": factor, "label": FACTOR_LABEL[factor], "region": region, "lines": lines,
             "share_direct": d, "share_indirect": i, "share_unexposed": max(0.0, 1 - d - i)}
 
 
@@ -522,45 +523,46 @@ def analogs(kind: str, direction: str, region: str, tickers: list[str], prices_c
     return {"kind": kind, "direction": direction, "region": region, "horizon_days": horizon,
             "n_events": len(dates), "first": str(dates[0].date()), "last": str(dates[-1].date()),
             "rows": rows,
-            "caveat": ("Association historique, pas une prévision. Peu de cas, et chaque période avait d'autres "
-                       "causes (par exemple, les hausses de 2022 ont coïncidé avec une baisse générale des marchés).")}
+            "caveat": ("Historical association, not a forecast. Few cases, and each period had other causes "
+                       "(for example, the 2022 hikes coincided with a broad market decline).")}
 
 
 # ----------------------------------------------------------------------------- impact on one portfolio
 
 STRESS_FOR = {("rates", "up"): "rates_up_1pt", ("inflation", "up"): "stocks_and_bonds_down"}
-PUBLISHER_FR = {"Bank of Canada": "La Banque du Canada", "Federal Reserve": "La Réserve fédérale américaine (Fed)",
-                "Statistics Canada": "Statistique Canada"}
+PUBLISHER_NAME = {"Bank of Canada": "The Bank of Canada", "Federal Reserve": "The U.S. Federal Reserve",
+                  "Statistics Canada": "Statistics Canada"}
 
 
-def _num_fr(x: float) -> str:
-    return f"{x:g}".replace(".", ",")
+def _fmt(x: float) -> str:
+    return f"{x:g}"
 
 
-def fact_fr(item: dict) -> str:
-    """One plain French sentence stating what the official text announces (no interpretation)."""
+def fact(item: dict) -> str:
+    """One plain sentence stating what the official text announces (no interpretation)."""
     d = item["analysis"].get("decision")
-    who = PUBLISHER_FR.get(item["publisher"], item["publisher"])
+    who = PUBLISHER_NAME.get(item["publisher"], item["publisher"])
     if not d:
-        return f"{who} : {item['title']}"
+        return f"{who}: {item['title']}"
     v = d.get("value")
     if d["kind"] == "policy_rate":
-        verb = {"up": "relevé", "down": "baissé", "unchanged": "maintenu"}[d["direction"]]
+        verb = {"up": "raised", "down": "lowered", "unchanged": "held"}[d["direction"]]
         if item["region"] == "US":
-            return f"{who} a {verb} son taux directeur" + (f" (borne haute : {_num_fr(v)} %)." if v is not None else ".")
-        return f"{who} a {verb} son taux directeur" + (f" à {_num_fr(v)} %." if v is not None else ".")
+            return f"{who} {verb} its policy rate" + (f" (upper bound {_fmt(v)}%)." if v is not None else ".")
+        return f"{who} {verb} its policy rate" + (f" {'at' if verb == 'held' else 'to'} {_fmt(v)}%." if v is not None else ".")
     if d["kind"] == "cpi":
-        trend = {"up": "en accélération", "down": "en ralentissement", "unchanged": "à peu près stable"}[d["direction"]]
+        trend = {"up": "speeding up", "down": "slowing down", "unchanged": "roughly stable"}[d["direction"]]
         prev = d.get("previous")
-        return (f"L'inflation au Canada était de {_num_fr(v)} % sur un an"
-                + (f" (contre {_num_fr(prev)} % le mois précédent)" if prev is not None else "") + f", {trend}.")
+        return (f"Canadian inflation was {_fmt(v)}% over one year"
+                + (f" (vs {_fmt(prev)}% the month before)" if prev is not None else "") + f", {trend}.")
     if d["kind"] == "unemployment":
-        trend = {"up": "en hausse", "down": "en baisse", "unchanged": "stable"}[d["direction"]]
-        return f"Le taux de chômage au Canada est {trend}" + (f", à {_num_fr(v)} %." if v is not None else ".")
+        trend = {"up": "rose", "down": "fell", "unchanged": "was stable"}[d["direction"]]
+        joiner = " at" if d["direction"] == "unchanged" else " to"
+        return f"Canada's unemployment rate {trend}" + (f"{joiner} {_fmt(v)}%." if v is not None else ".")
     if d["kind"] == "gdp":
-        trend = {"up": "a augmenté", "down": "a diminué", "unchanged": "est resté à peu près stable"}[d["direction"]]
-        return f"Le PIB réel du Canada {trend}" + (f" de {_num_fr(v)} %." if v is not None else ".")
-    return f"{who} : {item['title']}"
+        trend = {"up": "grew", "down": "shrank", "unchanged": "was roughly unchanged"}[d["direction"]]
+        return f"Canada's real GDP {trend}" + (f" by {_fmt(v)}%." if v is not None and d["direction"] != "unchanged" else ".")
+    return f"{who}: {item['title']}"
 
 
 def _dedupe(items: list[dict]) -> list[dict]:
@@ -578,7 +580,7 @@ CONCENTRATED = 0.5   # half the portfolio directly exposed to one current news f
 
 
 def _pct(x: float) -> str:
-    return f"{x * 100:.0f}".replace(".", ",") + " %"
+    return f"{x * 100:.0f}%"
 
 
 def impact(weights: dict[str, float], universe: pd.DataFrame, items: list[dict],
@@ -600,33 +602,32 @@ def impact(weights: dict[str, float], universe: pd.DataFrame, items: list[dict],
             analog = analogs(dec["kind"], direction, it["region"], held, prices_cad)
         analog_note = None
         if analog is None and dec and dec["kind"] == "policy_rate" and direction == "unchanged":
-            analog_note = ("Pas de cas comparables mesurés : les décisions de statu quo ne sont pas datées dans nos "
-                           "séries de taux.")
+            analog_note = ("No comparable cases measured: decisions to hold rates are not dated in our rate "
+                           "series.")
         elif analog is None and direction == "unchanged":
-            analog_note = "Pas de changement marqué, donc rien de comparable à mesurer."
+            analog_note = "No marked change, so nothing comparable to measure."
         elif analog is None:
-            analog_note = "Pas de cas comparables mesurables dans nos données pour ce type de nouvelle."
+            analog_note = "No measurable comparable cases in our data for this kind of news."
         stress = None
         scen = STRESS_FOR.get((factor, direction)) or STRESS_FOR.get((factor, None))
         if scen and amount:
             stress = time_machine.shock(weights, universe, amount, scen)
         d, i, u = ex["share_direct"], ex["share_indirect"], ex["share_unexposed"]
         names = ", ".join(sorted({x["name"] for x in ex["lines"] if x["channel"] == "direct"}))
-        msg = (f"Cette nouvelle touche directement {_pct(d)} de votre portefeuille"
-               + (f" ({names})" if names else "") + f", indirectement {_pct(i)}.")
+        msg = (f"This news directly affects {_pct(d)} of your portfolio"
+               + (f" ({names})" if names else "") + f", and {_pct(i)} indirectly.")
         if d >= CONCENTRATED:
-            note = (f"Plus de la moitié de votre argent réagit directement à ce facteur : votre portefeuille "
-                    f"dépend beaucoup de lui.")
+            note = "More than half of your money reacts directly to this factor: your portfolio depends heavily on it."
         elif u >= 0.4:
-            note = f"{_pct(u)} n'y est pas exposé : c'est à ça que sert la diversification."
+            note = f"{_pct(u)} is not exposed to it: that is what diversification is for."
         else:
-            note = "L'effet est réparti sur plusieurs placements, sans en dominer un seul."
+            note = "The effect is spread over several holdings, with none dominating."
         rows.append({
             "id": it["id"], "title": it["title"], "publisher": it["publisher"], "region": it["region"],
-            "published_at": it["published_at"], "link": it["link"], "fact": fact_fr(it),
-            "text_status": it["text_status"], "text_status_fr": it["text_status_fr"],
-            "importance": a["importance"], "decision": dec, "factor": factor, "factor_fr": FACTOR_FR[factor],
-            "other_factors": [FACTOR_FR[f] for f in a["main_factors"][1:]],
+            "published_at": it["published_at"], "link": it["link"], "fact": fact(it),
+            "text_status": it["text_status"], "text_status_label": it["text_status_label"],
+            "importance": a["importance"], "decision": dec, "factor": factor, "factor_label": FACTOR_LABEL[factor],
+            "other_factors": [FACTOR_LABEL[f] for f in a["main_factors"][1:]],
             "quotes": a["key_quotes"], "forward_share": a["forward_share"], "analyzer": a["analyzer"],
             "exposure": ex, "concentrated": d >= CONCENTRATED, "message": msg, "note": note,
             "analog": analog, "analog_note": analog_note, "stress": stress})
@@ -634,5 +635,5 @@ def impact(weights: dict[str, float], universe: pd.DataFrame, items: list[dict],
     read = sum(it["text_status"] == "ok" for it in items)
     return {"items": rows, "n_collected": len(items), "n_text_read": read,
             "sources": sorted({it["publisher"] for it in items}),
-            "rule": "Les nouvelles expliquent; elles ne changent pas l'allocation recommandée.",
-            "notes": [f"Texte complet lu pour {read} des {len(items)} communiqués officiels collectés."]}
+            "rule": "News explain what moves your money; they never change the recommended allocation.",
+            "notes": [f"Full text read for {read} of {len(items)} official releases collected."]}

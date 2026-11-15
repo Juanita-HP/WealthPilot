@@ -116,7 +116,7 @@ def test_ticker_headlines_report_why_text_is_missing():
     hs = [{"id": "1", "ticker": "NVDA", "title": "Nvidia news", "link": "https://finance.yahoo.com/x.html"}]
     out = news.read_texts(hs, fetcher(web))
     assert out["read"] == 0 and out["blocked"] == 1
-    assert "finance.yahoo.com" in out["note"] and "preuve" in out["note"]
+    assert "finance.yahoo.com" in out["note"] and "never evidence" in out["note"]
 
 
 # ----------------------------------------------------------------------------- feeds
@@ -184,11 +184,11 @@ def test_text_without_economic_content_is_not_news_for_the_portfolio():
     assert a.decision is None and a.main_factors == [] and a.importance == 1
 
 
-def test_french_fact_sentences():
+def test_fact_sentences():
     item = {"publisher": "Bank of Canada", "region": "CA", "title": "", "analysis": mn.analyze_text(BOC_TEXT).to_dict()}
-    assert mn.fact_fr(item) == "La Banque du Canada a relevé son taux directeur à 2,5 %."
+    assert mn.fact(item) == "The Bank of Canada raised its policy rate to 2.5%."
     item = {"publisher": "Statistics Canada", "region": "CA", "title": "", "analysis": mn.analyze_text(CPI_TEXT).to_dict()}
-    assert "3,1 %" in mn.fact_fr(item) and "stable" in mn.fact_fr(item)
+    assert "3.1%" in mn.fact(item) and "stable" in mn.fact(item)
 
 
 # ----------------------------------------------------------------------------- portfolio exposure
@@ -224,7 +224,7 @@ def test_currency_exposure_is_everything_in_us_dollars(universe):
 
 def _item(text, publisher="Bank of Canada", region="CA", at="2026-10-28T14:00:00+00:00"):
     return {"id": at, "source": "x", "publisher": publisher, "region": region, "title": "t", "link": "https://x",
-            "published_at": at, "text_status": "ok", "text_status_fr": "texte lu", "text_chars": len(text),
+            "published_at": at, "text_status": "ok", "text_status_label": "text read", "text_chars": len(text),
             "analysis": mn.analyze_text(text).to_dict(), "retrieved_at": at}
 
 
@@ -237,13 +237,13 @@ def test_impact_message_dedupe_and_purity(universe):
     assert w == BALANCED, "news never change the allocation"
     boc = [r for r in out["items"] if r["publisher"] == "Bank of Canada"]
     assert len(boc) == 1 and boc[0]["decision"]["direction"] == "up", "only the latest decision of a kind is kept"
-    assert "35 %" in boc[0]["message"] and "diversification" in boc[0]["note"]
+    assert "35%" in boc[0]["message"] and "diversification" in boc[0]["note"]
     assert out["n_text_read"] == 3
 
 
 def test_concentrated_portfolio_is_flagged(universe):
     out = mn.impact({"XBB.TO": 0.8, "XIU.TO": 0.2}, universe, [_item(BOC_TEXT)])
-    assert out["items"][0]["concentrated"] and "moitié" in out["items"][0]["note"]
+    assert out["items"][0]["concentrated"] and "More than half" in out["items"][0]["note"]
 
 
 def test_rate_hike_suggests_rate_stress_test(universe):
@@ -260,7 +260,7 @@ def test_analogs_from_real_rate_history():
     a = mn.analogs("policy_rate", "up", "CA", ["XBB.TO", "SPY"], px)
     assert a is not None and a["n_events"] >= 5
     assert {r["verdict"] for r in a["rows"]} <= {"clear", "unclear", "too_few"}
-    assert "pas une prévision" in a["caveat"]
+    assert "not a forecast" in a["caveat"]
 
 
 @requires_starter

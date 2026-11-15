@@ -17,9 +17,10 @@ Through an **Investor Profile Questionnaire**, WealthPilot creates an investor p
 ## Tech Stack
 
 - **Data Science:** Python, pandas, NumPy, Jupyter Notebook
-- **Visualization:** Plotly / Matplotlib
-- **AI & Cloud:** AWS (Amazon Bedrock under consideration)
-- **Frontend:** Streamlit (proposed)
+- **Visualization:** Chart.js (interface), Matplotlib (analysis)
+- **AI & Cloud:** Claude on Amazon Bedrock, AWS Lambda, S3, DynamoDB
+- **Frontend:** React 18 + Vite (`web/`)
+- **API:** FastAPI (`wealthpilot/api.py`)
 - **Project Management:** GitHub Projects, Scrumban
 
 ## Project Deliverables
@@ -41,13 +42,27 @@ python scripts/train_inflation.py        # inflation model + model card
 pytest
 ```
 
-### Demo interface
+### Demo interface (React + FastAPI)
+
+Needs Node.js 18+ for the interface. Build it once, then one Python process serves both the API and the interface:
 
 ```bash
-streamlit run app/streamlit_app.py
+cd web && npm install && npm run build && cd ..
+python -m wealthpilot.api
 ```
 
-Create a (fictional) account, then a six-step onboarding in dollars (situation, finances, goals, risk comfort, experience and themes, summary); the profile is saved and reloaded at the next login. The dashboard has six tabs: plan by goal, time machine, ticker dashboard with news, global news mapped to the portfolio, strategy lab, devil's advocate, profile. Demo personas (Amira, Mateo, Robert) prefill the onboarding. Accounts are stored locally (`data/users/`, git-ignored) with salted PBKDF2 hashes; Amazon Cognito would replace this in a deployment. The agents tab needs `WEALTHPILOT_LLM=bedrock` (AWS credentials) or `WEALTHPILOT_LLM=anthropic`.
+Open http://127.0.0.1:8000. For development with hot reload, run the API and the Vite dev server side by side
+(Vite forwards `/api` to port 8000), then open http://localhost:5173:
+
+```bash
+uvicorn wealthpilot.api:app --reload --port 8000
+```
+
+```bash
+cd web && npm run dev
+```
+
+Create a (fictional) account, then answer the questionnaire, one question per page, with amounts in dollars (work situation, income and spending, assets and debts, goals with their horizons, comfort with risk, experience, themes and preferences, summary); the profile is saved and reloaded at the next login. Pages: stock research (search with suggestions, price chart, fundamentals, and two gauges: fit with your profile and unbiased measured growth, with the explanation behind each), watchlist, my plan (one sub-portfolio per goal, official news mapped to the portfolio, six risks), time machine, devil's advocate (plus the Claude agents), strategy lab, profile. The browser cannot call Yahoo Finance directly (CORS), so the API relays the market-data requests of the stock page. Demo personas (Amira, Mateo, Robert) prefill the onboarding. Accounts are stored locally (`data/users/`, git-ignored) with salted PBKDF2 hashes; Amazon Cognito would replace this in a deployment. The agents need `WEALTHPILOT_LLM=bedrock` (AWS credentials) or `WEALTHPILOT_LLM=anthropic`.
 
 ### Core modules
 
@@ -69,6 +84,7 @@ Create a (fictional) account, then a six-step onboarding in dollars (situation, 
 | `wealthpilot/goals.py`, `risks.py`, `whatif.py` | One sub-portfolio per goal with its own horizon; six kinds of risk; what would change the answer |
 | `wealthpilot/onboarding.py`, `wealthpilot/accounts.py` | Numeric onboarding: capacity from emergency months, share of assets invested, debt to income, savings rate, employment and dependents; flags (cushion short, savings over-committed, high debt); demo accounts |
 | `wealthpilot/agents/` | Advisor and devil's advocate agents (Claude on Amazon Bedrock), tools with receipts, deterministic verifier |
+| `wealthpilot/api.py`, `web/` | HTTP API (FastAPI) and React interface; every text the API returns is plain English, ready to display |
 | `wealthpilot/aws/`, `infra/` | Lambda handler, S3 data sync, DynamoDB audit trail, SAM template (see `docs/aws.md`) |
 
 Architecture, agents, validation and limits: [`docs/architecture.md`](docs/architecture.md).

@@ -123,6 +123,26 @@ Recommendations are diversified portfolios, so the news that matters moves whole
 
 On the current data, no past-event difference is "clear": with 10 Bank of Canada hikes in the 2021-2026 window, Canadian bonds averaged -1.0% over the next 20 days against +0.1% usually, 1.9 standard errors. The interface says "no clear effect" rather than overstating it.
 
+## Interface (React) and API
+
+`web/` is a React 18 app built with Vite; `wealthpilot/api.py` (FastAPI) serves it and the JSON it needs, so one
+process runs the demo. All texts are in English and come from the API ready to display; the interface formats numbers.
+
+| Page | Endpoint(s) | What the investor sees |
+|---|---|---|
+| Sign in / create account | `/api/auth/*`, `/api/me` | Fictional accounts; salted PBKDF2 hashes, HMAC-signed session tokens (7 days) |
+| Questionnaire | `/api/meta`, `/api/onboarding/preview`, `/api/profile` | One question per page, amounts in dollars, live ratios (savings rate, cushion, net worth), profile summary before saving |
+| Stocks | `/api/yahoo/...` (relay), `/api/stocks/{symbol}/insights`, `/api/stocks/{symbol}/news` | Search with suggestions, chart and fundamentals; two gauges with red / yellow / green zones (profile fit: 0-40-70-100; measured growth: 0-45-70-100), explanation on demand; headlines labeled fact or opinion with the reason their text was or was not read |
+| Watchlist | none (browser storage) | Saved companies |
+| My plan | `/api/plan`, `/api/news/portfolio` | One sub-portfolio per goal, official news mapped to the portfolio, six risks |
+| Time machine | `/api/time-machine` | Replay in the investor's dollars, "would you have held on?", hypothetical shocks |
+| Devil's advocate | `/api/advocate`, `/api/ask` | Challenges with counterpoints; Claude agents when Bedrock is configured |
+| Lab | `/api/lab` | A trading rule tuned in sample and tested out of sample against holding |
+| Profile | `/api/profile`, `/api/profile/level` | Capacity, tolerance, flags; a more cautious level can be chosen, never a riskier one |
+
+The Yahoo relay only forwards four read-only market-data paths (chart, search, quote, fundamentals time series);
+anything else gets a 404. The browser never calls a third-party proxy.
+
 ## Known data issues
 
 - CNQ.TO shows a 1.021 "split" on 2022-08-22 next to a special dividend; it is not a real share split (organizers' note). Adjusted prices are used for returns.

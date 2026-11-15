@@ -43,7 +43,7 @@ def test_negative_amounts_and_unknown_employment_rejected():
 
 def test_flags_from_numbers():
     o = ob.Onboarding(fin(cash_savings=1_000, debts=50_000, monthly_savings=200),
-                      [gl.GoalSpec("Retraite", "retirement", 25, 500_000, 50_000, 900)], TOL)
+                      [gl.GoalSpec("Retirement", "retirement", 25, 500_000, 50_000, 900)], TOL)
     codes = {f.code for f in ob.build_profile(o).flags}
     assert {"EMERGENCY_FUND_SHORT", "SAVINGS_OVERCOMMITTED", "HIGH_DEBT"} <= codes
 

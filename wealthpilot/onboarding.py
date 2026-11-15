@@ -22,13 +22,13 @@ from . import profile as pf
 from .goals import GoalSpec
 
 EMPLOYMENT = {  # code -> (stability score 0..1, label)
-    "public": (1.0, "Fonction publique ou emploi très stable"),
-    "salaried": (0.8, "Salarié(e) permanent(e)"),
-    "retired": (0.6, "Retraité(e) avec rente ou pension"),
-    "contract": (0.45, "Contractuel(le), commissions, saisonnier"),
-    "self_employed": (0.4, "Travailleur(se) autonome"),
-    "student": (0.3, "Étudiant(e)"),
-    "unemployed": (0.0, "Sans emploi"),
+    "public": (1.0, "Public sector or very stable job"),
+    "salaried": (0.8, "Permanent employee"),
+    "retired": (0.6, "Retired with a pension"),
+    "contract": (0.45, "Contract, commission or seasonal work"),
+    "self_employed": (0.4, "Self-employed"),
+    "student": (0.3, "Student"),
+    "unemployed": (0.0, "Unemployed"),
 }
 PROVINCES = ["QC", "ON", "BC", "AB", "MB", "SK", "NS", "NB", "NL", "PE", "YT", "NT", "NU"]
 
@@ -191,8 +191,8 @@ def suggested_goals(fin: Financials) -> list[GoalSpec]:
     """Default goals: the emergency fund sized from expenses, and long-term growth or retirement."""
     years_to_65 = max(1, 65 - fin.age)
     return [
-        GoalSpec("Coussin d'urgence", "emergency_fund", 0, round(fin.emergency_target(), -2), fin.cash_savings, 0),
-        GoalSpec("Retraite", "retirement", years_to_65, round(25 * 12 * fin.monthly_expenses, -3), fin.investments,
+        GoalSpec("Emergency fund", "emergency_fund", 0, round(fin.emergency_target(), -2), fin.cash_savings, 0),
+        GoalSpec("Retirement", "retirement", years_to_65, round(25 * 12 * fin.monthly_expenses, -3), fin.investments,
                  round(fin.monthly_savings * 0.6, -1)),
     ]
 
@@ -202,23 +202,23 @@ def suggested_goals(fin: Financials) -> list[GoalSpec]:
 PERSONAS = {
     "Amira": Onboarding(
         Financials(26, "QC", "salaried", 95_000, 3_200, 1_500, 15_000, 40_000, 0, 12_000, 0),
-        [GoalSpec("Coussin d'urgence", "emergency_fund", 0, 9_600, 15_000, 0),
-         GoalSpec("Croissance long terme", "retirement", 20, 600_000, 40_000, 1_200)],
+        [GoalSpec("Emergency fund", "emergency_fund", 0, 9_600, 15_000, 0),
+         GoalSpec("Long-term growth", "retirement", 20, 600_000, 40_000, 1_200)],
         dict(drop_reaction="buy_more", range_choice="D", goal="max_growth", experience="intermediate",
              return_expectation="7to10"),
         pf.Preferences(crypto="open", region="global", themes=("tech_ai", "crypto"))),
     "Mateo": Onboarding(
         Financials(41, "ON", "salaried", 110_000, 5_500, 1_200, 25_000, 150_000, 150_000, 10_000, 2),
-        [GoalSpec("Coussin d'urgence", "emergency_fund", 0, 33_000, 25_000, 300),
-         GoalSpec("Études des enfants", "project", 10, 80_000, 20_000, 300),
-         GoalSpec("Retraite", "retirement", 22, 900_000, 130_000, 600)],
+        [GoalSpec("Emergency fund", "emergency_fund", 0, 33_000, 25_000, 300),
+         GoalSpec("Children's education", "project", 10, 80_000, 20_000, 300),
+         GoalSpec("Retirement", "retirement", 22, 900_000, 130_000, 600)],
         dict(drop_reaction="hold", range_choice="B", goal="balanced", experience="intermediate",
              return_expectation="5to7"),
         pf.Preferences(esg="exclude", values=("no_fossil_fuels",), themes=("health", "consumer"))),
     "Robert": Onboarding(
         Financials(59, "QC", "salaried", 140_000, 6_000, 2_500, 60_000, 450_000, 600_000, 0, 0),
-        [GoalSpec("Coussin d'urgence", "emergency_fund", 0, 18_000, 60_000, 0),
-         GoalSpec("Retraite dans 4 ans", "retirement", 4, 600_000, 450_000, 2_000)],
+        [GoalSpec("Emergency fund", "emergency_fund", 0, 18_000, 60_000, 0),
+         GoalSpec("Retirement in 4 years", "retirement", 4, 600_000, 450_000, 2_000)],
         dict(drop_reaction="hold", range_choice="C", goal="preserve", experience="advanced",
              return_expectation="5to7"),
         pf.Preferences(themes=("canadian_banks", "dividends"))),

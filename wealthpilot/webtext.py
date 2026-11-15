@@ -37,14 +37,14 @@ DEFAULT_DELAY = 1.0      # seconds between two requests to the same host
 MIN_TEXT = 300           # characters; below this the page is not an article (or is paywalled)
 MAX_BYTES = 3_000_000
 
-STATUS_FR = {
-    "ok": "texte lu",
-    "robots_disallow": "le site n'autorise pas l'analyse automatique par IA (robots.txt)",
-    "paywall": "article réservé aux abonnés",
-    "too_short": "page sans texte d'article exploitable",
-    "http_error": "page inaccessible",
-    "network_error": "site injoignable",
-    "not_html": "document non HTML",
+STATUS_TEXT = {
+    "ok": "text read",
+    "robots_disallow": "the site does not allow automated analysis by AI agents (robots.txt)",
+    "paywall": "subscribers only",
+    "too_short": "no usable article text on the page",
+    "http_error": "page unavailable",
+    "network_error": "site unreachable",
+    "not_html": "not an HTML document",
 }
 
 # Hosts that moved; following the redirect would leave the allowed network.
@@ -74,8 +74,8 @@ class Page:
         return self.status == "ok"
 
     @property
-    def status_fr(self) -> str:
-        return STATUS_FR.get(self.status, self.status)
+    def status_label(self) -> str:
+        return STATUS_TEXT.get(self.status, self.status)
 
     def to_dict(self):
         return asdict(self)

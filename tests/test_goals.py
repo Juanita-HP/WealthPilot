@@ -49,7 +49,7 @@ def test_non_financial_preferences():
     simple = st.policy_allocation(p).weights
     full = st.policy_allocation(pf.build_profile(MATEO)).weights
     assert len(simple) < len(full) and sum(simple.values()) == pytest.approx(1.0)
-    assert pf.level_card(p.level)["fr"] == "Équilibré"
+    assert pf.level_card(p.level)["name"] == "Balanced"
 
 
 def test_tipping_points_are_real():

@@ -54,13 +54,13 @@ def _hash(password: str, salt: bytes) -> bytes:
 
 def create_user(username: str, password: str, db: Path | None = None) -> None:
     if not USERNAME.match(username or ""):
-        raise AccountError("Nom d'utilisateur : 3 à 32 caractères (lettres, chiffres, . _ -).")
+        raise AccountError("Username: 3 to 32 characters (letters, digits, . _ -).")
     if len(password or "") < 8:
-        raise AccountError("Mot de passe : au moins 8 caractères.")
+        raise AccountError("Password: at least 8 characters.")
     salt = secrets.token_bytes(16)
     with _conn(db) as c:
         if c.execute("SELECT 1 FROM users WHERE username = ?", (username.lower(),)).fetchone():
-            raise AccountError("Ce nom d'utilisateur existe déjà.")
+            raise AccountError("This username is already taken.")
         c.execute("INSERT INTO users VALUES (?, ?, ?, ?)", (username.lower(), salt, _hash(password, salt),
                                                              datetime.now(timezone.utc).isoformat(timespec="seconds")))
 
