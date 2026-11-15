@@ -215,7 +215,8 @@ CHALLENGE_TITLE = {"SINGLE_SECURITY": "Too large for a single stock", "EQUITY_AB
                    "RECENCY_BIAS": "Recency bias", "HIDDEN_CONCENTRATION": "Less diversified than it looks",
                    "HOME_BIAS": "Home bias", "HYPE": "Lots of media noise",
                    "NEWS_EXPOSURE": "Dependence on a topic in the news",
-                   "RECENT_NEWS": "Recent news: read with a grain of salt", "GOLD_ABOVE_LIMIT": "Too much gold",
+                   "RECENT_NEWS": "Recent news: read with a grain of salt",
+                   "ESG_CONTROVERSY": "ESG or controversy signal in recent news", "GOLD_ABOVE_LIMIT": "Too much gold",
                    "EQUITY_BELOW_RANGE": "Few stocks for your level"}
 VERDICT = {"reconsider": ("red", "Reconsider"), "proceed with care": ("yellow", "Proceed with care"),
            "no major objection": ("green", "No major objection")}

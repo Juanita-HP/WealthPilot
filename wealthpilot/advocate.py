@@ -140,8 +140,10 @@ def review_allocation(proposed: dict[str, float], profile: InvestorProfile, pric
     return Review(subject, challenges, before_after)
 
 
-HYPE_SHARE = 0.5   # share of headlines that are forecasts/opinions from low-trust sources
-HYPE_MIN_HEADLINES = 5
+# Share of headlines that are forecasts/opinions from low-trust sources. At 0.5 the challenge never fired for
+# NVDA (0.40), SPY (0.45) or TSLA (0.31) while it did for PG (0.54): 0.30 catches the stocks in the spotlight.
+HYPE_SHARE = 0.30
+HYPE_MIN_HEADLINES = 4
 
 
 def review_trade(ticker: str, weight: float, current: dict[str, float], profile: InvestorProfile,
@@ -193,6 +195,9 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
             "Attention is not evidence either way: popular stocks can keep rising. Facts from high-trust sources are "
             "listed separately: " + "; ".join(h["title"] for h in news_digest.get("top_descriptive", [])[:2]),
             "Is the interest in this stock coming from its results, or from what people say about it?"))
+    esg = esg_controversy_challenge(profile, news_digest, universe)
+    if esg:
+        rv.challenges.append(esg)
     recent = recent_news_challenge(ticker, profile, prices, news_digest)
     if recent:
         rv.challenges.append(recent)
@@ -209,6 +214,32 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
             "share, the more the next announcement of the same kind will matter.",
             "Do you want the next announcement on this topic to affect this much of your money?"))
     return rv
+
+
+def esg_controversy_challenge(profile: InvestorProfile, news_digest: dict | None,
+                              universe: pd.DataFrame | None = None) -> Challenge | None:
+    """External evidence for investors with ESG or values preferences: ESG or legal/regulatory headlines."""
+    prefs = profile.preferences
+    if not news_digest or (prefs.esg == "none" and not prefs.values):
+        return None
+    items = news_digest.get("controversies") or []
+    count = len(items) or news_digest.get("by_category", {}).get("esg_controversy", 0)
+    if not count:
+        return None
+    cats = news_digest.get("by_category", {})
+    total = max(count, cats.get("esg_controversy", 0) + cats.get("legal_regulatory", 0))
+    first = items[0] if items else None
+    claim = (f"{total} of the {news_digest.get('n', total)} recent headlines are about ESG or regulatory issues"
+             + (f", for example \"{first['title']}\" ({first['publisher']}, {first['published_at'][:10]})." if first else "."))
+    screened = universe is not None and "ESGV" in universe.index
+    return Challenge(
+        "ESG_CONTROVERSY", "ESG & controversy signal", "warning" if prefs.esg == "exclude" else "info", claim,
+        {"controversies": items, "by_category": cats, "esg_preference": prefs.esg, "values": list(prefs.values)},
+        "Headlines are not an ESG audit: they show what is being reported, not the company's full record, and "
+        "public data has gaps. " + ("A screened fund (ESGV, U.S. stocks) is available in this simulation for "
+                                     "investors who prefer a provider's ESG rules." if screened else
+                                     "No ESG-screened fund is available in this universe."),
+        "Does this recent coverage align with your ESG and values preferences?")
 
 
 MATERIAL = {"management", "legal_regulatory", "earnings", "deal", "esg_controversy"}

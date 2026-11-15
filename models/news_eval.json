@@ -70,5 +70,17 @@
   "importance_mae": 1.046875,
   "relevance_accuracy": 0.859375,
   "n": 64
+ },
+ {
+  "at": "2026-11-15T05:48:30+00:00",
+  "classifier": "rules-v4",
+  "type_accuracy": 0.765625,
+  "predictive_precision": 0.7916666666666666,
+  "predictive_recall": 0.6551724137931034,
+  "category_accuracy": 0.359375,
+  "sentiment_sign_accuracy": 0.46875,
+  "importance_mae": 1.046875,
+  "relevance_accuracy": 0.859375,
+  "n": 64
  }
 ]
