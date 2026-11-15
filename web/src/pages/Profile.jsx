@@ -26,7 +26,7 @@ export default function Profile({ username, onChanged, onSignOut, onDeleted }) {
     <section className="page">
       <div className="page-heading">
         <div className="eyebrow">INVESTOR PROFILE · {username}</div>
-        <h1>{pr.name} · {pr.score_10}/10</h1>
+        <h1>{pr.name} · {pr.score_10}/10 risk</h1>
         <p>Recommended level. Suits {pr.suits}.</p>
       </div>
       <div className="analysis-grid" style={{ marginTop: 0 }}>
