@@ -717,6 +717,38 @@ def time_machine(user: str = Depends(current_user)):
     })
 
 
+# Role of each building block in the plan, and the planning assumption it maps to (FP Canada / IFP 2026).
+BLOCK_ROLE = {"canadian_equity": ("Growth", "canadian_equity"), "us_equity": ("Growth", "us_equity"),
+              "us_equity_esg": ("Growth", "us_equity"), "us_growth": ("Growth", "us_equity"),
+              "intl_equity": ("Growth", "international_equity"), "em_equity": ("Growth", "emerging_equity"),
+              "canadian_bonds": ("Stability", "fixed_income"), "us_bonds": ("Stability", "fixed_income"),
+              "cash": ("Cash reserve", "short_term"), "gold": ("Diversifier", None), "crypto": ("Diversifier", None)}
+
+
+def _role(ticker: str) -> tuple[str, float | None]:
+    """(role, expected return per year after inflation from the planning guidelines, or None)."""
+    block = next((b for b, t in strategist.BLOCKS.items() if t == ticker), None)
+    if block is None:
+        return "Single stock (theme)", None
+    role, key = BLOCK_ROLE[block]
+    if key is None:
+        return role, None
+    nominal = pf.assumptions.RETURNS[key]
+    return role, (1 + nominal) / (1 + pf.assumptions.INFLATION) - 1
+
+
+def _yield_context(start, end) -> dict | None:
+    """Canada 10-year bond yield at the start and end of the window: the starting yield drives bond returns."""
+    try:
+        y = data.load_macro_history("BD.CDN.10YR.DQ.YLD", point_in_time=False).dropna()
+    except (FileNotFoundError, KeyError):
+        return None
+    at = lambda d: float(y.loc[:d].iloc[-1]) if len(y.loc[:d]) else None  # noqa: E731
+    latest = y.index[-1]
+    return {"start": at(start), "end": at(end), "latest": float(y.iloc[-1]), "latest_date": str(latest.date()),
+            "max": float(y.loc[start:end].max()), "source": "Bank of Canada, 10-year benchmark bond yield"}
+
+
 def holdings_vs_inflation(weights: dict[str, float], m: dict, r) -> dict | None:
     """Each holding of the plan and the plan itself, as growth of 100, next to the cost of living (CPI)."""
     if m["cpi"] is None:
@@ -733,18 +765,25 @@ def holdings_vs_inflation(weights: dict[str, float], m: dict, r) -> dict | None:
         total = float(s.iloc[-1] / s.iloc[0] - 1)
         annual = (1 + total) ** (1 / years) - 1
         real = (1 + annual) / (1 + infl_annual) - 1
+        role, expected_real = _role(ticker) if ticker else ("Whole plan", None)
         return {"ticker": ticker, "name": label, "weight": weight, "total_return": total, "annual_return": annual,
-                "real_annual_return": real, "beats_inflation": real > 0,
+                "real_annual_return": real, "beats_inflation": real > 0, "role": role,
+                "expected_real_return": expected_real,
                 "growth": (weekly(s / s.iloc[0]) * 100).round(2).tolist()}
     u = m["universe"]
     holdings = [row(u.loc[t, "name"], t, w, m["px_cad"][t].reindex(idx).ffill())
                 for t, w in sorted(weights.items(), key=lambda kv: -kv[1]) if w > 0.001 and t in m["px_cad"]]
     plan = row("Your plan (all holdings, rebalanced quarterly, after costs)", None, 1.0, r.path["value"])
+    covered = [h for h in holdings if h["expected_real_return"] is not None]
+    cw = sum(h["weight"] for h in covered)
+    plan["expected_real_return"] = (sum(h["weight"] * h["expected_real_return"] for h in covered) / cw) if cw else None
+    plan["expected_coverage"] = cw
     return {"start": str(idx[0].date()), "end": str(idx[-1].date()),
             "dates": [str(x.date()) for x in weekly(r.path["value"]).index],
             "inflation": {"total": infl_total, "annual": infl_annual, "growth": (weekly(cpi) * 100).round(2).tolist(),
                           "source": "Statistics Canada, consumer price index (all items)"},
-            "plan": plan, "holdings": holdings,
+            "plan": plan, "holdings": holdings, "yields": _yield_context(idx[0], idx[-1]),
+            "assumptions": {"inflation": pf.assumptions.INFLATION, "source": pf.assumptions.SOURCE["name"]},
             "note": "In Canadian dollars, dividends reinvested. Real return = return above the rise in the cost of "
                     "living. Past results do not predict future returns."}
 

@@ -30,7 +30,21 @@ def test_plan_combines_goals_by_money_and_orders_emergency_first():
                        gl.GoalSpec("Cushion", "emergency_fund", 0, 10000, 10000)])
     assert sum(plan.total_weights.values()) == pytest.approx(1.0)
     assert plan.order[0] == "Cushion"
-    assert plan.total_weights["ZST.TO"] > 0.1  # the cushion's cash weighs in the total
+    # The cushion's cash weighs in the total; the 24-year goal holds none (the cushion is the cash reserve).
+    assert plan.total_weights["ZST.TO"] == pytest.approx(0.1)
+    retirement = next(g for g in plan.goals if g.goal.name == "Retirement")
+    assert retirement.weights.get("ZST.TO", 0) == 0
+
+
+def test_safe_sleeve_duration_matches_short_horizons():
+    p = pf.build_profile(MATEO)  # level 3: 20% cash-like by default
+    share, why = st.cash_share_for(p.level, 4)
+    bond = st.CANADIAN_BOND_SHARE * st.DURATION["canadian_bonds"] + (1 - st.CANADIAN_BOND_SHARE) * st.DURATION["us_bonds"]
+    assert share * st.DURATION["cash"] + (1 - share) * bond == pytest.approx(4)  # average duration = horizon
+    assert "duration" in why
+    assert st.cash_share_for(p.level, 8)[0] == st.CASH_SHARE[p.level]          # never below the level's share
+    assert st.cash_share_for(p.level, 15)[0] == 0.0
+    assert st.cash_share_for(p.level, None)[0] == st.CASH_SHARE[p.level]       # without a goal: unchanged
 
 
 def test_more_conservative_choice_allowed_more_aggressive_refused():

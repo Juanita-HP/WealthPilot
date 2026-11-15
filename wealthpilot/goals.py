@@ -146,7 +146,7 @@ def plan_goal(profile: pf.InvestorProfile, g: GoalSpec, prices: pd.DataFrame | N
     why = (f"Profile level {profile.level} ({profile.level_name}); a {g.horizon_years:g}-year horizon allows up to "
            f"level {cap} ({pf.LEVELS[cap].name}). The goal uses the lower: level {level}.")
     goal_profile = profile if level == profile.level else pf.with_level(profile, level, why)
-    al = policy_allocation(goal_profile, prices)
+    al = policy_allocation(goal_profile, prices, horizon_years=g.horizon_years)
     notes = list(al.notes)
     expected = pf.expected_return(level, goal_profile.constraints.home_equity_share, al.equity_share,
                                   split=al.equity_split or goal_profile.constraints.equity_split)

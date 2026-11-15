@@ -7,24 +7,28 @@ import { YAHOO, api, fmt, num, requestJSON, resolveTicker, signedPct, verifyTick
 const KINDS = { EQUITY: "Stock", ETF: "ETF", MUTUALFUND: "Fund", CRYPTOCURRENCY: "Crypto", CURRENCY: "Currency" };
 const WORDS = ["a company.", "an ETF.", "a crypto.", "a currency.", "a fund."];
 
-// Types one word, erases it, types the next. With reduced motion, the words simply change.
-function useTypewriter(words) {
+// Typewriter: erases the word one character at a time (backspace), then types the next one character at a time.
+// "Research " stays; only the part after it changes.
+function useTypewriter(words, { type = 95, erase = 70, hold = 1800, gap = 350 } = {}) {
   const [text, setText] = useState(words[0]);
   useEffect(() => {
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    let i = 0, n = words[0].length, deleting = false, timer;
+    let i = 0, n = words[0].length, deleting = true, timer;
     const tick = () => {
-      if (reduce) { i = (i + 1) % words.length; setText(words[i]); timer = setTimeout(tick, 2600); return; }
-      const word = words[i];
-      if (!deleting && n === word.length) { deleting = true; timer = setTimeout(tick, 1900); return; }
-      if (deleting && n === 0) { deleting = false; i = (i + 1) % words.length; timer = setTimeout(tick, 250); return; }
-      n += deleting ? -1 : 1;
+      if (deleting) {
+        if (n === 0) { deleting = false; i = (i + 1) % words.length; timer = setTimeout(tick, gap); return; }
+        n -= 1;
+        setText(words[i].slice(0, n));
+        timer = setTimeout(tick, erase);
+        return;
+      }
+      if (n === words[i].length) { deleting = true; timer = setTimeout(tick, hold); return; }
+      n += 1;
       setText(words[i].slice(0, n));
-      timer = setTimeout(tick, deleting ? 45 : 85);
+      timer = setTimeout(tick, type);
     };
-    timer = setTimeout(tick, 1900);
+    timer = setTimeout(tick, hold);
     return () => clearTimeout(timer);
-  }, [words]);
+  }, [words, type, erase, hold, gap]);
   return text;
 }
 
@@ -213,8 +217,8 @@ export default function Home() {
         {!overview && <div className="analysis-status">Loading markets…</div>}
         {overview?.failed && <div className="analysis-status">Market overview unavailable right now. Search still works.</div>}
         <MarketSection title="Popular investments" sub="Widely held funds, crypto, gold and the U.S. dollar. Latest trading day." cards={overview?.popular} />
-        <MarketSection title="Trending today" sub={overview?.rule} cards={overview?.trending} />
-        {overview && !overview.failed && <p className="note">Prices from Yahoo Finance, may be delayed. Click a card to see its details, as if you had searched it.</p>}
+        <MarketSection title="Trending today" cards={overview?.trending} />
+        {overview && !overview.failed && <p className="note">Click a card to see its details.</p>}
       </div>
     </section>
   );
