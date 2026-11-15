@@ -28,7 +28,7 @@ def main() -> None:
     OUT.mkdir(parents=True)
     subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--no-cache-dir",
                     "--platform", "manylinux2014_x86_64", "--implementation", "cp", "--python-version", "3.13",
-                    "--only-binary=:all:", "--target", str(OUT), "-r", str(ROOT / "requirements-api-lambda.txt")],
+                    "--only-binary=:all:", "--target", str(OUT), "-r", str(ROOT / "infra" / "requirements-api-lambda.txt")],
                    check=True)
     shutil.copytree(ROOT / "wealthpilot", OUT / "wealthpilot", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     for d in sorted(OUT.rglob("*"), reverse=True):  # deepest first
