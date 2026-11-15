@@ -64,6 +64,7 @@ The [data report](docs/Data_Report.pdf) documents source selection, preprocessin
 | **[Live prototype](https://d3pmr84q14pg9z.cloudfront.net/)** | Product experience and demo personas |
 | **[Project one-pager](docs/One_pager_wealthpilot.png)** | Visual overview of the problem, solution and approach |
 | **[Data report](docs/Data_Report.pdf)** | Sources, EDA, methodology and limitations |
+| **[AWS architecture map](docs/AWS_ARCHITECTURE.md)** | CloudFront, S3, Lambda, Bedrock, DynamoDB and SageMaker diagrams |
 | [Technical architecture](infra/architecture.md) | Agent workflow, validation and design choices |
 | [Technical specifications](docs/technical/project_overview_requirements.md) | Requirements, constraints and scope |
 | [Developer guide](docs/technical/DEVELOPMENT.md) | Setup, commands, code map and deployment details |
