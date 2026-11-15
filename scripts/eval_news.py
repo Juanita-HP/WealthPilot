@@ -4,7 +4,7 @@ Usage:
     python scripts/eval_news.py                      # rule baseline only (offline)
     WEALTHPILOT_LLM=bedrock python scripts/eval_news.py v1 v2   # plus prompt versions on Claude
 
-Writes models/news_eval.json (all runs, appended) and docs/news_eval.md (latest table).
+Writes models/news_eval.json (all runs, appended) and models/news_eval.md (latest table).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT))
 from wealthpilot import news  # noqa: E402
 
 OUT = ROOT / "models" / "news_eval.json"
-DOC = ROOT / "docs" / "news_eval.md"
+DOC = ROOT / "models" / "news_eval.md"
 METRICS = ["type_accuracy", "predictive_precision", "predictive_recall", "category_accuracy",
            "sentiment_sign_accuracy", "importance_mae", "relevance_accuracy", "n"]
 
