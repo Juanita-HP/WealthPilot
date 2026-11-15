@@ -16,6 +16,7 @@ import os
 import re
 import secrets
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -29,13 +30,22 @@ class AccountError(ValueError):
     pass
 
 
-def _conn(db: Path | None = None) -> sqlite3.Connection:
+@contextmanager
+def _conn(db: Path | None = None):
+    """Connection that commits on success, rolls back on error and is always closed."""
     path = Path(db or DB_PATH)
     path.parent.mkdir(parents=True, exist_ok=True)
     c = sqlite3.connect(path)
-    c.execute("CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, salt BLOB, hash BLOB, created TEXT)")
-    c.execute("CREATE TABLE IF NOT EXISTS profiles (username TEXT PRIMARY KEY, data TEXT, updated TEXT)")
-    return c
+    try:
+        c.execute("CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, salt BLOB, hash BLOB, created TEXT)")
+        c.execute("CREATE TABLE IF NOT EXISTS profiles (username TEXT PRIMARY KEY, data TEXT, updated TEXT)")
+        yield c
+        c.commit()
+    except BaseException:
+        c.rollback()
+        raise
+    finally:
+        c.close()
 
 
 def _hash(password: str, salt: bytes) -> bytes:

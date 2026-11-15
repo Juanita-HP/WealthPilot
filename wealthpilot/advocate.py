@@ -146,8 +146,12 @@ HYPE_MIN_HEADLINES = 5
 
 def review_trade(ticker: str, weight: float, current: dict[str, float], profile: InvestorProfile,
                  prices: pd.DataFrame, universe: pd.DataFrame, risk: dict | None = None,
-                 news_digest: dict | None = None) -> Review:
-    """Challenge a request to put ``weight`` of the portfolio in ``ticker``."""
+                 news_digest: dict | None = None, macro_items: list[dict] | None = None) -> Review:
+    """Challenge a request to put ``weight`` of the portfolio in ``ticker``.
+
+    ``macro_items``: recent official news (``macro_news.recent``). If the trade makes the portfolio depend much
+    more on a factor that is in the news right now, the challenge shows it.
+    """
     if ticker not in universe.index:
         raise KeyError(f"{ticker} is not in the asset universe")
     proposed = {t: w * (1 - weight) for t, w in current.items() if t != ticker}
@@ -189,7 +193,40 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
             "Attention is not evidence either way: popular stocks can keep rising. Facts from high-trust sources are "
             "listed separately: " + "; ".join(h["title"] for h in news_digest.get("top_descriptive", [])[:2]),
             "Is the interest in this stock coming from its results, or from what people say about it?"))
+    news_exp = news_exposure_change(current, proposed, universe, macro_items or [])
+    if news_exp:
+        rv.challenges.append(Challenge(
+            "NEWS_EXPOSURE", "concentration on a current news factor", "warning" if news_exp["after"] >= 0.5 else "info",
+            f"Avec ce changement, la part de votre portefeuille directement exposée au facteur "
+            f"« {news_exp['factor_fr']} » passe de {news_exp['before'] * 100:.0f} % à {news_exp['after'] * 100:.0f} %. "
+            f"Ce facteur est dans l'actualité : {news_exp['fact']}",
+            news_exp,
+            "Une nouvelle ne dit pas dans quel sens le marché va bouger; elle dit seulement ce qui va faire bouger "
+            "votre argent. Plus la part exposée est grande, plus la prochaine nouvelle du même type comptera.",
+            "Voulez-vous que la prochaine annonce sur ce sujet touche autant de votre argent ?"))
     return rv
+
+
+NEWS_EXPOSURE_JUMP = 0.10   # +10 points of the portfolio directly exposed to a factor in the news
+
+
+def news_exposure_change(current: dict[str, float], proposed: dict[str, float], universe: pd.DataFrame,
+                         macro_items: list[dict]) -> dict | None:
+    """Largest rise in direct exposure to a factor that recent official news are about."""
+    from . import macro_news as mn
+    best = None
+    for it in mn._dedupe(macro_items):
+        a = it["analysis"]
+        if a["importance"] < 3 or not a["main_factors"]:
+            continue
+        f = a["main_factors"][0]
+        before = mn.exposure(current, universe, f, it["region"])["share_direct"]
+        after = mn.exposure(proposed, universe, f, it["region"])["share_direct"]
+        if after - before >= NEWS_EXPOSURE_JUMP and (best is None or after - before > best["after"] - best["before"]):
+            best = {"factor": f, "factor_fr": mn.FACTOR_FR[f], "region": it["region"], "before": before,
+                    "after": after, "fact": mn.fact_fr(it), "source": it["publisher"], "date": it["published_at"][:10],
+                    "link": it["link"]}
+    return best
 
 
 def review_lab(result) -> Review:

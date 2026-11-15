@@ -3,8 +3,9 @@
 Pipeline
 --------
 1. Collect: headlines per ticker from Yahoo Finance's search endpoint (title,
-   publisher, publication time, related tickers). We store what the API
-   returns; we do not scrape article pages or get around access controls.
+   publisher, publication time, related tickers). Article pages are read only where the
+   site's robots.txt allows AI agents (``read_texts``, ``webtext``). Yahoo
+   Finance does not, so for its links the headline is context, not evidence.
 2. Trust: each publisher gets a documented trust score (regulator and company
    releases high, wire services and major newspapers next, aggregators and
    promotional sites low).
@@ -24,12 +25,13 @@ News are used to EXPLAIN and CHALLENGE, never to predict prices.
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-NEWS_DIR = Path(__file__).resolve().parent.parent / "data" / "news"
+NEWS_DIR = Path(os.environ.get("WEALTHPILOT_NEWS_DIR", Path(__file__).resolve().parent.parent / "data" / "news"))
 PROMPTS_DIR = Path(__file__).resolve().parent / "news_prompts"
 
 # ----------------------------------------------------------------------------- source trust
@@ -363,3 +365,51 @@ def recent_headlines(ticker: str, max_age_hours: float = 12.0, count: int = 20, 
     rows = [h.to_dict() for h in fetch_headlines(ticker, count, search)]
     save_jsonl(rows, path)
     return rows
+
+
+# ----------------------------------------------------------------------------- article texts
+
+
+def read_texts(headlines: list[dict], fetcher=None, max_fetch: int = 5) -> dict:
+    """Try to read the article behind each headline (robots.txt respected, see ``webtext``).
+
+    Returns per-headline status and, for texts that could be read, the share of sentences that are forecasts
+    and the sentences that mention the asset. Only texts that were actually read can be used as evidence.
+    """
+    from . import macro_news, webtext
+    fetcher = fetcher or webtext.Fetcher()
+    rows, fetched = [], 0
+    for h in headlines:
+        link = h.get("link") or ""
+        if not link:
+            rows.append({"id": h["id"], "status": "too_short", "status_fr": webtext.STATUS_FR["too_short"]})
+            continue
+        ok, why = fetcher.allowed(webtext.normalize(link))
+        if not ok:
+            rows.append({"id": h["id"], "status": "robots_disallow", "status_fr": webtext.STATUS_FR["robots_disallow"],
+                         "reason": why})
+            continue
+        if fetched >= max_fetch:
+            rows.append({"id": h["id"], "status": "not_attempted", "status_fr": "non lu (limite par recherche)"})
+            continue
+        page = fetcher.get(link)
+        fetched += 1
+        row = {"id": h["id"], "status": page.status, "status_fr": page.status_fr, "reason": page.reason}
+        if page.ok:
+            sents = macro_news.sentences(page.text)
+            words = NAME_KEYWORDS.get(h.get("ticker", ""), []) + [h.get("ticker", "").split(".")[0]]
+            about = [s for s in sents if any(re.search(r"(?<![A-Za-z])" + re.escape(w) + r"(?![A-Za-z])", s, re.I)
+                                             for w in words if w)]
+            row.update({"chars": len(page.text), "sentences": len(sents),
+                        "forward_share": sum(bool(macro_news.FORWARD.search(s)) for s in sents) / max(len(sents), 1),
+                        "quotes": about[:2]})
+        rows.append(row)
+    n = len(rows)
+    read = sum(r["status"] == "ok" for r in rows)
+    blocked = sum(r["status"] == "robots_disallow" for r in rows)
+    hosts = sorted({re.sub(r"^https?://([^/]+).*$", r"\1", h.get("link") or "") for h in headlines
+                    if h.get("link")})
+    note = (f"Texte lu pour {read} des {n} articles."
+            + (f" {blocked} ne peuvent pas l'être : le site ({', '.join(hosts)}) n'autorise pas l'analyse "
+               "automatique par IA. Ces manchettes restent du contexte et ne servent pas de preuve." if blocked else ""))
+    return {"rows": rows, "n": n, "read": read, "blocked": blocked, "note": note}

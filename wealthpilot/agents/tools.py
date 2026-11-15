@@ -13,7 +13,7 @@ from typing import Callable
 
 import pandas as pd
 
-from .. import advocate, data, goals, lab, news, portfolio, risks, strategist, ticker, time_machine, whatif
+from .. import advocate, data, goals, lab, macro_news, news, portfolio, risks, strategist, ticker, time_machine, whatif
 from .. import inflation as infl
 from .. import profile as pf
 from .ledger import Ledger, jsonable
@@ -156,12 +156,31 @@ def _digest(symbol: str) -> dict | None:
         return None
 
 
+def _macro_items() -> list[dict]:
+    try:
+        return macro_news.recent()
+    except Exception:  # official news are optional evidence
+        return []
+
+
 def t_review_trade(s: Session, symbol: str, weight: float):
     _need_profile(s)
     if not s.portfolio:
         raise ValueError("No current portfolio. Call propose_allocation first or provide one.")
     return advocate.review_trade(symbol.upper(), weight, s.portfolio, s.profile, s.prices_cad, s.universe,
-                                 news_digest=_digest(symbol.upper())).to_dict()
+                                 news_digest=_digest(symbol.upper()), macro_items=_macro_items()).to_dict()
+
+
+def t_macro_news(s: Session, weights: list[dict]):
+    w = _weights(weights) if weights else s.portfolio
+    if not w:
+        raise ValueError("No portfolio. Call propose_allocation first or provide weights.")
+    out = macro_news.impact(w, s.universe, _macro_items(), s.prices_cad, amount=s.amount or None)
+    for it in out["items"]:
+        if it.get("stress"):
+            it["stress"] = {k: it["stress"][k] for k in ("scenario", "label", "portfolio_return", "dollars", "kind")}
+    return {**out, "use": "Explain what moves the portfolio and which test to run; never change the allocation "
+                          "because of news (market timing)."}
 
 
 def t_news(s: Session, symbol: str):
@@ -286,6 +305,12 @@ TOOLS = [
          "Recent headlines about one ticker: share of forecasts/opinions vs facts, source trust, hype share, "
          "trust-weighted sentiment, top facts and top opinions. For context and justification, never to predict.",
          _obj({"symbol": {"type": "string"}}), t_news, frozenset({"advisor", "advocate"})),
+    Tool("macro_news_impact",
+         "Recent official economic news (Bank of Canada, Federal Reserve, Statistics Canada), read in full: what "
+         "each announced (with exact quotes), which risk factor it concerns, the share of the portfolio directly and "
+         "indirectly exposed, what happened after similar past events in our price data, and the matching stress "
+         "test (empty list = current portfolio). For explanation only, never to change the allocation.",
+         _obj({"weights": WEIGHTS}), t_macro_news, frozenset({"advisor", "advocate"})),
     Tool("strategy_lab",
          "Test a trading rule on one ticker: optimized on 70% of history, tested on the rest, against buy-and-hold.",
          _obj({"symbol": {"type": "string"}, "strategy": {"type": "string", "enum": list(lab.STRATEGIES)}}),

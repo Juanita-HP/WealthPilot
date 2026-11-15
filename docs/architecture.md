@@ -84,6 +84,8 @@ Explainability and governance, the two "possibilities" of the brief, are built i
 | FP Canada / Institute of Financial Planning, Projection Assumption Guidelines 2026 | Long-term planning returns and inflation | Goal feasibility (labeled as assumptions) |
 | Yahoo Finance via yfinance (live, cached with retrieval time) | Fundamentals, analyst estimates | Ticker dashboard; analyst figures labeled as third-party opinion |
 | Yahoo Finance search endpoint via yfinance (headlines, publisher, time, related tickers; no article bodies) | Recent news, 308 headlines collected 2026-11-14 | News digest and hype challenge; 64 headlines hand-labeled as a golden set (`data/news/golden_v0.jsonl`, labeling guide in `wealthpilot/news_prompts/`) |
+| Official press releases, full text: Bank of Canada, Federal Reserve (RSS) and Statistics Canada's The Daily (Atom), read with BeautifulSoup where robots.txt allows AI agents | Rate decisions, CPI, jobs, GDP, trade, retail; refreshed every 12 hours | "The news and your portfolio": what was announced (exact quotes), exposed share of the portfolio, past similar events, matching stress test |
+| FRED `DFEDTARU` | Upper limit of the federal funds target range since 2008 | Dates of past Fed decisions for the event study; checking the analyzer |
 
 Point-in-time rules: monthly macro data is usable from the first day of the second month after its reference month; daily data from the next business day; trading decisions execute at the next close.
 
@@ -91,14 +93,35 @@ Point-in-time rules: monthly macro data is usable from the first day of the seco
 
 | Step | How | Why |
 |---|---|---|
-| Collect | Yahoo Finance search endpoint (allowed API, no scraping, no CAPTCHA bypass) | Public, documented, respects access terms |
+| Collect | Yahoo Finance search endpoint (headlines only: its robots.txt excludes AI agents from article pages) | Public, documented, respects access terms |
 | Trust | Five documented tiers (official 1.0, wire 0.85, media 0.65, aggregator 0.45, promotional 0.3) | Weight facts by where they come from |
 | Relevance | Company names and tickers in the headline | Search returns loosely related stories |
 | Classify | Rule baseline (offline) and Claude with versioned prompts (`v1`, `v2`); same labeling guide for humans and prompts | Separate facts from forecasts and opinions |
 | Evaluate | `scripts/eval_news.py` on the golden set; prompt examples excluded from scoring; results in `models/news_eval.json` | Each prompt version must beat the previous one |
 | Use | Digest per ticker (facts first, opinions apart, hype share); devil's advocate HYPE challenge with facts as counterpoint; agent tool `news_digest` | News explain and challenge; they never predict prices |
 
-Baseline result: rules-v1 gets 70% type accuracy but finds only 48% of predictive headlines (see `docs/news_eval.md`). The prompt versions are scored with the same script once Bedrock access is available.
+Baseline result: rules-v2 gets 77% type accuracy and finds 66% of predictive headlines (see `docs/news_eval.md`). The prompt versions are scored with the same script once Bedrock access is available.
+
+### Article texts: who allows what
+
+Headlines alone are too thin to justify anything, so the text behind each item is read when the site allows it. `wealthpilot/webtext.py` downloads a page only if the site's robots.txt allows both our user agent and the AI agents (`ClaudeBot`, `anthropic-ai`), since the text is analysed by a model; it waits the site's crawl delay, caches pages for 7 days, never bypasses a CAPTCHA or a paywall, and gives every item a status (text read, site excludes AI agents, subscribers only, page unreachable). Yahoo Finance's robots.txt excludes AI agents, so its headlines stay context and are never used as evidence; the interface says so under each ticker's news.
+
+### Global news and the portfolio (`wealthpilot/macro_news.py`)
+
+Recommendations are diversified portfolios, so the news that matters moves whole asset classes. Official sources publish their full texts and allow them to be read.
+
+| Step | How | Why |
+|---|---|---|
+| Collect | RSS/Atom feeds of the Bank of Canada, the Federal Reserve and Statistics Canada (major releases only: CPI, Labour Force Survey, GDP, merchandise trade, retail) | Official, complete, allowed |
+| Read | BeautifulSoup extraction of the main text; boilerplate removed | Evidence is the text, not a headline |
+| Analyse | Decision and figure (policy rate, CPI, unemployment, GDP), risk factors (rates, inflation, currency, energy, growth, trade) with exact sentences, share of forecast sentences; rule analyzer `macro-rules-v1`, Claude prompt `macro_v1` (quotes kept only if found verbatim) | Facts apart from the source's forecasts, every claim with its sentence |
+| Check | `scripts/eval_macro.py` compares each decision read with the official series of the same institution (V39079, DFEDTARU, total CPI y/y): 11 of 11 correct on the first run | No hand labels needed for decisions |
+| Map | Documented rules per factor and region: direct (e.g. Canadian bonds for a Bank of Canada decision), indirect (rate-sensitive sectors, foreign bonds), not exposed | The unexposed share is what diversification buys |
+| Compare | Returns of each holding over the 20 business days after past similar events (rate hikes, cuts, CPI accelerations) vs the usual 20-day return; "clear" only beyond two standard errors | Measured history, labeled as association |
+| Stress | Rate hike: rates up 1 point (bond durations); inflation acceleration: stocks and bonds down | Turns the news into a concrete "what if" |
+| Use | Box "L'actualité et votre portefeuille" in the plan tab; devil's advocate NEWS_EXPOSURE when a request makes the portfolio depend 10+ points more on a factor in the news; agent tool `macro_news_impact` | News explain; they never change the allocation (market timing) |
+
+On the current data, no past-event difference is "clear": with 10 Bank of Canada hikes in the 2021-2026 window, Canadian bonds averaged -1.0% over the next 20 days against +0.1% usually, 1.9 standard errors. The interface says "no clear effect" rather than overstating it.
 
 ## Known data issues
 
