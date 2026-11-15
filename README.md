@@ -68,6 +68,12 @@ cd web && npm run dev
 
 Create a (fictional) account, then answer the questionnaire, one question per page, with amounts in dollars (work situation, income and spending, assets and debts, goals with their horizons, comfort with risk, experience, themes and preferences, summary); the profile is saved and reloaded at the next login. Pages: stock research (search with suggestions, price chart, fundamentals, and two gauges: fit with your profile and unbiased measured growth, with the explanation behind each), watchlist, my plan (one sub-portfolio per goal, official news mapped to the portfolio, six risks), time machine, devil's advocate (plus the Claude agents), profile. My plan also answers "invest now, spread it out, or wait for a good moment?" with the investor's own money, the team's ML timing model being the "wait" contender, and, for experienced investors, a trading-rule tester. The browser cannot call Yahoo Finance directly (CORS), so the API relays the market-data requests of the stock page. Demo personas (Amira, Mateo, Robert) prefill the onboarding. Accounts are stored locally (`data/users/`, git-ignored) with salted PBKDF2 hashes; Amazon Cognito would replace this in a deployment. The agents need `WEALTHPILOT_LLM=bedrock` (AWS credentials) or `WEALTHPILOT_LLM=anthropic`.
 
+### Hosted version on AWS
+
+The website runs on AWS: CloudFront serves the React build from S3 and sends `/api/*` to the FastAPI app on Lambda
+(accounts in DynamoDB, agents on Amazon Bedrock). Deploy or update it from AWS CloudShell with
+`bash scripts/deploy_aws.sh`; no access keys are needed (see `docs/aws.md`).
+
 ### Core modules
 
 | Module | What it does |
@@ -90,7 +96,7 @@ Create a (fictional) account, then answer the questionnaire, one question per pa
 | `wealthpilot/onboarding.py`, `wealthpilot/accounts.py` | Numeric onboarding: capacity from emergency months, share of assets invested, debt to income, savings rate, employment and dependents; flags (cushion short, savings over-committed, high debt); demo accounts |
 | `wealthpilot/agents/` | Advisor and devil's advocate agents (Claude on Amazon Bedrock), tools with receipts, deterministic verifier |
 | `wealthpilot/api.py`, `web/` | HTTP API (FastAPI) and React interface; every text the API returns is plain English, ready to display |
-| `wealthpilot/aws/`, `infra/` | Lambda handler, S3 data sync, DynamoDB audit trail, SAM template (see `docs/aws.md`) |
+| `wealthpilot/aws/`, `infra/` | Lambda handlers (agents, hosted API), S3 data sync, DynamoDB audit trail, SAM templates (see `docs/aws.md`) |
 
 Architecture, agents, validation and limits: [`docs/architecture.md`](docs/architecture.md).
 

@@ -1,0 +1,8 @@
+# Hosted API on AWS Lambda (infra/hosting.yaml). boto3 ships with the Lambda runtime.
+# No scikit-learn/scipy: the models are trained offline, the API only reads their JSON artifacts.
+numpy>=1.26
+pandas>=2.1
+beautifulsoup4>=4.12
+fastapi>=0.110
+mangum>=0.17
+yfinance>=0.2
