@@ -10,7 +10,7 @@ evaluation needs no hand labels:
 
 Labour Force Survey and GDP releases are counted but not verifiable with our series.
 
-Output: models/macro_eval.json and docs/macro_eval.md
+Output: models/macro_eval.json and models/macro_eval.md
 Usage: python scripts/eval_macro.py
 """
 
@@ -105,7 +105,7 @@ def main() -> None:
                      f"{r['direction_true']} {r['value_true']} ({r['series']}) | {ok} |")
     lines += ["", "Limits: the feeds only go back a few months to a year, so the sample is small; "
               "the rules were written while reading recent releases, so a later sample is the real test."]
-    (ROOT / "docs" / "macro_eval.md").write_text("\n".join(l for l in lines if l is not None) + "\n")
+    (ROOT / "models" / "macro_eval.md").write_text("\n".join(l for l in lines if l is not None) + "\n")
     print(json.dumps({k: v for k, v in out.items() if k != "rows"}, indent=2))
     for r in rows:
         if not (r["found"] and r["value_ok"] and r["direction_ok"]):
