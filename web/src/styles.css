@@ -388,3 +388,14 @@ table.data td.num,table.data th.num{text-align:right;white-space:nowrap}
 .contrib b{text-align:right}
 .contrib b.up{color:var(--red)}.contrib b.down{color:var(--green)}
 @media(max-width:650px){.contrib{grid-template-columns:1fr 70px}.contrib-bar{grid-column:1/-1;grid-row:2}}
+
+/* Invest now, spread, or wait */
+.entry-ways{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
+.entry-way{position:relative;background:#f7f6f3;border-radius:12px;padding:18px;border:1px solid transparent}
+.entry-way.best{background:#fbf6e8;border-color:#e6d5a8}
+.entry-badge{position:absolute;top:-10px;right:14px;background:var(--ink);color:var(--gold);font-size:10px;font-weight:700;padding:4px 9px;border-radius:20px}
+.entry-title{font-weight:700;font-size:14px}
+.entry-value{font-size:28px;font-weight:700;letter-spacing:-1px;margin-top:10px}
+.entry-way p{margin:10px 0 0;line-height:1.6}
+.entry-verdict{font-size:14px;line-height:1.7;margin-top:18px}
+@media(max-width:800px){.entry-ways{grid-template-columns:1fr}}

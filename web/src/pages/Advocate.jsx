@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { LabPanel } from "./Lab.jsx";
 import { api, pct } from "../lib.js";
 
 const METRICS = [["cagr", "Annual return", true], ["volatility", "Volatility", true], ["max_drawdown", "Worst fall", true], ["sharpe", "Sharpe ratio", false]];
@@ -15,10 +14,8 @@ export default function Advocate() {
   const [error, setError] = useState("");
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState(null);
-  const [timing, setTiming] = useState(null);
 
   useEffect(() => { api("/universe").then(setUniverse).catch(e => setError(e.message)); }, []);
-  useEffect(() => { api("/timing").then(setTiming).catch(() => setTiming({ available: false })); }, []);
   useEffect(() => { try { sessionStorage.removeItem("wp_advocate_symbol"); } catch { /* storage off */ } }, []);
   const suggested = "Ask the AI agents to analyze how recent news and risks on " + symbol + " affect my profile";
 
@@ -101,45 +98,6 @@ export default function Advocate() {
           )}
         </>
       )}
-      {timing?.available && (
-        <>
-          <h2 className="section-title">Thinking of timing the market?</h2>
-          <div className="card">
-            <p style={{ marginTop: 0 }}>
-              We tested a real machine-learning timing model ({timing.source.toLowerCase()}): it estimates the chance of a
-              2% rise over the next 5 days and buys when that chance is high enough. Each year from 2010 was a test it had
-              never seen, with realistic costs ({(timing.costs.main.per_side * 100).toFixed(2)}% per trade side: $0
-              commission at Wealthsimple or Questrade, plus the bid-ask spread).
-            </p>
-            <table className="data">
-              <thead><tr><th>Asset</th><th className="num">Years it beat holding</th><th className="num">Total, model</th>
-                <th className="num">Total, holding</th><th className="num">Skill (AUC)</th><th>Shown as a signal?</th></tr></thead>
-              <tbody>{timing.assets.map(a => (
-                <tr key={a.ticker}><td>{a.ticker}</td><td className="num">{a.wins_sharpe} of {a.tests}</td>
-                  <td className="num">{pct(a.model_compounded)}</td><td className="num">{pct(a.hold_compounded)}</td>
-                  <td className="num">{a.auc?.toFixed(2)}</td><td>{a.usable ? "Yes" : "No: fails the test"}</td></tr>))}
-              </tbody>
-            </table>
-            <p className="small muted">
-              A signal is shown only if, after costs, it beats holding in at least {pct(timing.gate.win_share_sharpe)} of the
-              years on the Sharpe ratio and the gap is significant (p &lt; {timing.gate.p_value}). The model reads short-term
-              moves a little better than chance, but being out of the market on a few of the best days costs more than the
-              losses it avoids. Results from {timing.trained_on}.
-            </p>
-            {["intermediate", "advanced"].includes(timing.experience) ? (
-              <details className="more">
-                <summary>Test a trading rule yourself</summary>
-                <div className="inner"><LabPanel /></div>
-              </details>
-            ) : (
-              <p className="small" style={{ marginBottom: 0 }}>
-                For most investors, buying regularly and holding a diversified portfolio has beaten trying to pick the moment.
-              </p>
-            )}
-          </div>
-        </>
-      )}
-
       <h2 className="section-title">Ask the advisor</h2>
       <div className="card">
         <p style={{ marginTop: 0 }} className="muted small">

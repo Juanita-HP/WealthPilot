@@ -69,14 +69,31 @@ def test_gate_requires_wins_and_significance():
     assert not tm.summarize(folds)["usable"]
 
 
-def test_artifact_and_advocate_challenge():
-    from wealthpilot import advocate as adv, onboarding as ob
+def test_artifact_gate_and_entry_study():
     art = tm.load_artifact()
     if art is None:
         pytest.skip("models/timing_model.json not trained")
     for t, a in art["assets"].items():
         s = a["scenarios"]["main"]["summary"]
         assert a["usable"] == (s["win_share_sharpe"] >= tm.USABLE_WIN_SHARE and s["p_value"] < tm.USABLE_P)
-    c = adv.market_timing_challenge("QQQ", ob.build_profile(ob.PERSONAS["Amira"]), art)
-    assert c.code == "MARKET_TIMING" and "yearly tests" in c.claim
-    assert adv.market_timing_challenge("TSLA", ob.build_profile(ob.PERSONAS["Amira"]), art) is None
+        e = a["entry"]
+        assert len(e["starts"]) == len(e["now"]) == len(e["spread"]) == len(e["signal"]) > 100
+        assert max(e["waited_days"]) <= 31 * tm.MAX_WAIT_MONTHS + 7
+    out = tm.entry_summary({"SPY": 0.5, "XIU.TO": 0.25, "XBB.TO": 0.25}, 100_000, art)
+    assert out["invested"] == pytest.approx(75_000) and set(out["funds"]) == {"SPY", "XIU.TO"}
+    assert 0 <= out["signal"]["beats_now_share"] <= 1 and out["now"]["average_value"] > 0
+    assert tm.entry_summary({"XBB.TO": 1.0}, 100_000, art) is None, "no tested stock fund, no card"
+
+
+def test_entry_study_mechanics():
+    idx = pd.bdate_range("2010-01-01", "2012-12-31")
+    close = pd.Series(np.linspace(100, 200, len(idx)), index=idx)          # steady rise
+    oos = pd.DataFrame({"prob": 0.0, "threshold": 0.5}, index=idx)          # never a signal
+    cash = pd.Series(1.0, index=idx)                                        # cash earns nothing
+    e = tm.entry_study(close, oos, cash, cost=0.0)
+    now, spread, signal = map(np.array, (e["now"], e["spread"], e["signal"]))
+    assert (now > spread).all() and (spread > signal).all(), "in a rising market, waiting costs money"
+    assert min(e["waited_days"]) >= 28 * tm.MAX_WAIT_MONTHS - 7, "no signal: invests at the six-month deadline"
+    oos["prob"] = 1.0                                                       # signal every day: buys the next day
+    e2 = tm.entry_study(close, oos, cash, cost=0.0)
+    assert max(e2["waited_days"]) <= 4

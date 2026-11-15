@@ -195,9 +195,6 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
             "Attention is not evidence either way: popular stocks can keep rising. Facts from high-trust sources are "
             "listed separately: " + "; ".join(h["title"] for h in news_digest.get("top_descriptive", [])[:2]),
             "Is the interest in this stock coming from its results, or from what people say about it?"))
-    timing_check = market_timing_challenge(ticker, profile)
-    if timing_check:
-        rv.challenges.append(timing_check)
     esg = esg_controversy_challenge(profile, news_digest, universe)
     if esg:
         rv.challenges.append(esg)
@@ -217,35 +214,6 @@ def review_trade(ticker: str, weight: float, current: dict[str, float], profile:
             "share, the more the next announcement of the same kind will matter.",
             "Do you want the next announcement on this topic to affect this much of your money?"))
     return rv
-
-
-def market_timing_challenge(ticker: str, profile: InvestorProfile, artifact: dict | None = None) -> Challenge | None:
-    """What the team's machine-learning timing model found for this asset, tested out of sample after costs."""
-    from . import timing
-    art = artifact if artifact is not None else timing.load_artifact()
-    a = (art or {}).get("assets", {}).get(ticker)
-    if not a:
-        return None
-    s = a["scenarios"]["main"]["summary"]
-    cost = art["costs"]["main"]["per_side"]
-    claim = (f"Thinking about the right moment to buy {ticker}? Our machine-learning timing model (a logistic regression "
-             f"on about thirty technical indicators and the VIX, from the team's backtesting engine) ranks the next "
-             f"5 days better than chance (average AUC {s['mean_auc']:.2f}), but as a buy-and-sell rule it beat simply "
-             f"holding {ticker} in {s['wins_sharpe']} of {s['tests']} yearly tests ({s['years']}) after realistic costs "
-             f"({cost * 100:.2f}% per trade side): {s['strategy_compounded'] * 100:.0f}% in total against "
-             f"{s['hold_compounded'] * 100:.0f}% for holding.")
-    if a["usable"] and profile.experience in {"intermediate", "advanced"}:
-        lt = a["latest"]
-        claim += (f" It passes our reliability test, so for information: its probability of a 2% rise over the next 5 days "
-                  f"is {lt['probability']:.0%} today (signal threshold {lt['threshold']:.0%}, data to {lt['as_of']}).")
-    counter = ("Some years it did better, and it does carry information about short-term moves; the gap with holding is "
-               f"not significant in its favour (p = {s['p_value']:.2f}). Being out of the market on a few of the best days "
-               "costs more than the losses it avoids.") if not a["usable"] else (
-               "It passed the test on past data, which does not guarantee the future; costs and taxes on frequent trades "
-               "add up.")
-    return Challenge("MARKET_TIMING", "market timing", "info", claim,
-                     {"summary": s, "costs_per_side": cost, "usable": a["usable"], "source": art.get("source")},
-                     counter, "Would buying regularly and holding fit your plan better than picking the moment?")
 
 
 def esg_controversy_challenge(profile: InvestorProfile, news_digest: dict | None,

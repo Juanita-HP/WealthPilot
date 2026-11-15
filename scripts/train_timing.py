@@ -44,7 +44,26 @@ def main() -> None:
         for k, label in (("zero_costs", "none"), ("main_costs", "0.05% per side")):
             o = a["original_protocol"][k]
             L.append(f"| {t} | {label} | {o['beats_on_return']}/4 | {o['beats_on_sharpe']}/4 |")
-    L += ["", "## Reading", "",
+    L += ["", "## The investor's question: invest now, spread over 6 months, or wait for the signal?", "",
+          "Each month since the first out-of-sample year, $1 invested three ways and valued 12 months later "
+          "(0.05% per purchase; cash waiting earns the policy rate; the signal uses out-of-sample probabilities only).", "",
+          "| Asset | Start months | Now (avg value) | Spread (avg) | Signal (avg) | Spread beats now | Signal beats now | Median wait |",
+          "|---|---|---|---|---|---|---|---|"]
+    import numpy as np
+    for t, a in art["assets"].items():
+        e = a.get("entry")
+        if not e:
+            continue
+        now, sp, sg = map(np.array, (e["now"], e["spread"], e["signal"]))
+        L.append(f"| {t} | {len(now)} ({e['starts'][0][:7]} to {e['starts'][-1][:7]}) | {now.mean():.3f} | {sp.mean():.3f} | "
+                 f"{sg.mean():.3f} | {pct((sp > now).mean())} | {pct((sg > now).mean())} | {int(np.median(e['waited_days']))} days |")
+    L += ["", "## Provenance", "",
+          "The model is the backtesting engine's (`src/ml`): same target (+2% within 5 days), same logistic regression, "
+          "same features and same 5-day holding rule, reimplemented in `wealthpilot/timing.py` with fixed indicator "
+          "settings. `tests/test_timing_parity.py` checks, when `BACKTESTING_ENGINE_PATH` points to the engine, that the "
+          "indicator features equal the engine's own `generateFeatures` output. The engine's C++ metrics are ported to "
+          "NumPy (`wealthpilot/metrics.py`) and cross-checked against the compiled module with `METRICS_CPP_PATH`.",
+          "", "## Reading", "",
           "The model has some ranking skill (average AUC above 0.5), but turning it into in-and-out trades misses part of "
           "the market's best days: after realistic costs it does not beat simply holding often enough, or significantly. "
           "With the threshold picked after seeing the test folds, the original backtest found '3 out of 4' for some "
