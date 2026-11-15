@@ -237,10 +237,30 @@ def level_from_score(score: float) -> int:
     return min(5, int(score // 20) + 1)
 
 
-def expected_return(level: int, home_share: float) -> dict:
-    """Assumed long-term return of a level's mid equity share (planning hypothesis)."""
+def equity_position(profile: "InvestorProfile") -> tuple[float, str]:
+    """Where the stock share sits inside the level's range (0 = minimum, 1 = maximum), and why.
+
+    Each level covers 20 points of the risk score (the lower of capacity and tolerance). An investor at 41/100 and
+    one at 59/100 are both Balanced, but the first sits at the bottom of the band and the second near the top, so
+    their stock shares should differ. When the level was lowered (by a goal's horizon or by the investor's own
+    choice), the score no longer says where to sit in the lower band: the midpoint is used.
+    """
+    natural = level_from_score(profile.risk_score)
+    lv = LEVELS[profile.level]
+    if natural != profile.level:
+        return 0.5, (f"level {profile.level} was set below the score's level {natural} (horizon or choice), "
+                     f"so the stock share sits at the middle of the {lv.equity_min:.0%}-{lv.equity_max:.0%} range")
+    lo = 20 * (profile.level - 1)
+    pos = min(1.0, max(0.0, (profile.risk_score - lo) / 20))
+    return pos, (f"risk score {profile.risk_score:.0f}/100 sits at {pos:.0%} of the {lo}-{lo + 20} band of level "
+                 f"{profile.level}, so the stock share sits at {pos:.0%} of the "
+                 f"{lv.equity_min:.0%}-{lv.equity_max:.0%} range")
+
+
+def expected_return(level: int, home_share: float, equity: float | None = None) -> dict:
+    """Assumed long-term return of a stock share (default: the level's midpoint). Planning hypothesis."""
     lv = LEVELS[level]
-    eq = (lv.equity_min + lv.equity_max) / 2
+    eq = (lv.equity_min + lv.equity_max) / 2 if equity is None else equity
     mix = {"canadian_equity": eq * home_share, "us_equity": eq * (1 - home_share), "fixed_income": 1 - eq}
     gross, _ = assumptions.blended_return(mix)
     return {"equity_share": eq, "gross": gross, "fees": FEE_ASSUMPTION, "net": gross - FEE_ASSUMPTION,
@@ -443,7 +463,7 @@ def build_profile(answers: dict[str, str], preferences: Preferences = Preference
             goal_analysis["lowest_level_reaching_goal"] = reachable_levels[0] if reachable_levels else None
             flags.append(Flag("GOAL_NOT_REACHABLE", "warning",
                               f"The goal needs about {need:.1%} per year; the assumption for level {level} is "
-                              f"{expected['net']:.1%}. Options: save {goal_analysis['monthly_contribution_needed']:,.0f} $ "
+                              f"{expected['net']:.1%}. Options: save ${goal_analysis['monthly_contribution_needed']:,.0f} "
                               f"per month, extend the horizon, or lower the target. The level is not raised "
                               f"automatically because it is set by capacity and tolerance.",
                               goal_analysis))

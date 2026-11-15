@@ -169,15 +169,27 @@ def build_profile(onb: Onboarding) -> pf.InvestorProfile:
     target = fin.emergency_target()
     if fin.cash_savings < target:
         extra.append(pf.Flag("EMERGENCY_FUND_SHORT", "warning",
-                             f"Emergency fund: {fin.cash_savings:,.0f} $ covers {fin.emergency_months:.1f} months; "
-                             f"the target is {target:,.0f} $ ({target / fin.monthly_expenses:.0f} months). "
+                             f"Emergency fund: ${fin.cash_savings:,.0f} covers {fin.emergency_months:.1f} months; "
+                             f"the target is ${target:,.0f} ({target / fin.monthly_expenses:.0f} months). "
                              "Filling it usually comes before investing.",
                              {"cash": fin.cash_savings, "target": target}))
     need = sum(g.monthly_contribution for g in onb.goals)
     if need > fin.monthly_savings + 1e-9:
         extra.append(pf.Flag("SAVINGS_OVERCOMMITTED", "warning",
-                             f"The goals plan {need:,.0f} $ a month but the stated savings capacity is "
-                             f"{fin.monthly_savings:,.0f} $.", {"planned": need, "capacity": fin.monthly_savings}))
+                             f"The goals plan ${need:,.0f} a month but the stated savings capacity is "
+                             f"${fin.monthly_savings:,.0f}.", {"planned": need, "capacity": fin.monthly_savings}))
+    # The plan invests what is set aside for the goals; it must match the savings and investments declared.
+    assigned, available = assigned_amount(onb), fin.cash_savings + fin.investments
+    if assigned > available + 1:
+        extra.append(pf.Flag("GOALS_EXCEED_ASSETS", "warning",
+                             f"The goals count ${assigned:,.0f} already set aside, but savings and investments total "
+                             f"${available:,.0f}. Lower the amounts already set aside, or update your savings.",
+                             {"assigned": assigned, "available": available}))
+    elif available - assigned > max(1000.0, 0.05 * available):
+        extra.append(pf.Flag("UNASSIGNED_SAVINGS", "info",
+                             f"${available - assigned:,.0f} of savings and investments is not assigned to a goal. The plan "
+                             "invests only what is assigned; add it to a goal to include it.",
+                             {"assigned": assigned, "available": available}))
     if fin.debt_to_income > 0.4:
         extra.append(pf.Flag("HIGH_DEBT", "warning",
                              f"Debts other than the mortgage equal {fin.debt_to_income:.0%} of income. Paying down "
@@ -185,6 +197,16 @@ def build_profile(onb: Onboarding) -> pf.InvestorProfile:
                              {"debt_to_income": fin.debt_to_income}))
     p.flags.extend(extra)
     return p
+
+
+def assigned_amount(onb: Onboarding) -> float:
+    """Money already set aside across the goals: the size of the simulated portfolio."""
+    return float(sum(g.current_amount for g in onb.goals))
+
+
+def invested_amount(onb: Onboarding) -> float:
+    """Money exposed to markets (goals other than the emergency fund): the amount risk questions talk about."""
+    return float(sum(g.current_amount for g in onb.goals if g.type != "emergency_fund"))
 
 
 def suggested_goals(fin: Financials) -> list[GoalSpec]:

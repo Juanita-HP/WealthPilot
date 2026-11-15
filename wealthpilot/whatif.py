@@ -70,6 +70,6 @@ def goal_conditions(profile: pf.InvestorProfile, g: GoalSpec, inflation_alt: flo
         need_base = pf.required_monthly_contribution(goal, exp)
         need_low = pf.required_monthly_contribution(goal, exp - 0.01)
         out.append(Condition(g.name, "If returns were 1 percentage point lower than the planning assumption",
-                             f"reaching the target would need {need_low:,.0f} $ a month instead of {need_base:,.0f} $.",
+                             f"reaching the target would need ${need_low:,.0f} a month instead of ${need_base:,.0f}.",
                              "return"))
     return out

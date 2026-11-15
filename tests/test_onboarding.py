@@ -120,3 +120,32 @@ def test_accounts(tmp_path):
     assert ob.Onboarding.from_dict(accounts.load_profile("demo.user", db)) == ob.PERSONAS["Amira"]
     raw = (db).read_bytes()
     assert b"longpassword" not in raw
+
+
+def test_stock_share_follows_the_exact_score_within_a_level():
+    from dataclasses import replace
+    from wealthpilot import strategist as st
+    p = ob.build_profile(ob.PERSONAS["Mateo"])
+    low, high = replace(p, risk_score=41.0), replace(p, risk_score=59.0)
+    assert low.level == high.level == 3
+    a, b = st.policy_allocation(low).equity_share, st.policy_allocation(high).equity_share
+    lv = pf.LEVELS[3]
+    assert lv.equity_min <= a < b <= lv.equity_max
+    assert "risk score 59/100" in st.policy_allocation(high).lines[0].reason
+
+
+def test_lowered_level_uses_the_middle_of_its_range():
+    p = ob.build_profile(ob.PERSONAS["Mateo"])
+    lower = pf.with_level(p, 2, "test")
+    pos, why = pf.equity_position(lower)
+    assert pos == 0.5 and "middle" in why
+
+
+def test_goal_amounts_must_match_savings_and_investments():
+    o = ob.PERSONAS["Amira"]
+    too_much = ob.Onboarding(o.financials, [gl.GoalSpec("Big", "retirement", 20, 900_000, 500_000, 0)], o.tolerance, o.preferences)
+    assert "GOALS_EXCEED_ASSETS" in {f.code for f in ob.build_profile(too_much).flags}
+    too_little = ob.Onboarding(o.financials, [gl.GoalSpec("Small", "retirement", 20, 900_000, 5_000, 0)], o.tolerance, o.preferences)
+    flags = {f.code: f for f in ob.build_profile(too_little).flags}
+    assert flags["UNASSIGNED_SAVINGS"].severity == "info" and "$50,000" in flags["UNASSIGNED_SAVINGS"].message
+    assert ob.assigned_amount(o) == o.financials.cash_savings + o.financials.investments

@@ -75,7 +75,7 @@ export default function Onboarding({ editing, onSaved, onCancel }) {
         setMeta(m);
         if (editing) {
           const p = await api("/profile");
-          setDraft(p.onboarding);
+          setDraft({ ...p.onboarding, _goalsTouched: true });
         } else {
           setDraft(m.blank);
         }
@@ -84,7 +84,17 @@ export default function Onboarding({ editing, onSaved, onCancel }) {
   }, [editing]);
 
   const fin = draft?.financials;
-  const set = (section, patch) => setDraft(d => ({ ...d, [section]: { ...d[section], ...patch } }));
+  // Until the investor edits the goals, the default goals follow the amounts entered: the emergency fund holds the
+  // cash savings and the long-term goal holds the investments, so the plan invests exactly what was declared.
+  const set = (section, patch) => setDraft(d => {
+    const next = { ...d, [section]: { ...d[section], ...patch } };
+    if (section === "financials" && !d._goalsTouched) {
+      const f = next.financials;
+      next.goals = d.goals.map(g => g.type === "emergency_fund" ? { ...g, current_amount: f.cash_savings }
+        : g.type === "retirement" ? { ...g, current_amount: f.investments } : g);
+    }
+    return next;
+  });
 
   // Live preview of the financial ratios and, on the last step, of the profile.
   useEffect(() => {
@@ -98,16 +108,21 @@ export default function Onboarding({ editing, onSaved, onCancel }) {
 
   const steps = useMemo(() => {
     if (!meta || !draft) return [];
-    const amount = Math.max(fin.investments, 1000);
+    const goalsList = draft.goals || [];
+    const assigned = goalsList.reduce((s, g) => s + (g.current_amount || 0), 0);
+    const available = fin.cash_savings + fin.investments;
+    // Risk questions talk about the money exposed to markets: what is set aside for goals other than the cushion.
+    const invested = goalsList.filter(g => g.type !== "emergency_fund").reduce((s, g) => s + (g.current_amount || 0), 0);
+    const amount = Math.max(invested || fin.investments, 1000);
     const goalLabel = Object.fromEntries(meta.goal_types.map(g => [g.value, g.label]));
     const q = meta.questions;
     const goals = draft.goals || [];
     const prefs = draft.preferences;
     const toggleGoal = type => setDraft(d => {
       const has = d.goals.some(g => g.type === type);
-      return { ...d, goals: has ? d.goals.filter(g => g.type !== type) : [...d.goals, defaultGoal(type, d.financials, goalLabel[type])] };
+      return { ...d, _goalsTouched: true, goals: has ? d.goals.filter(g => g.type !== type) : [...d.goals, defaultGoal(type, d.financials, goalLabel[type])] };
     });
-    const setGoal = (type, patch) => setDraft(d => ({ ...d, goals: d.goals.map(g => g.type === type ? { ...g, ...patch } : g) }));
+    const setGoal = (type, patch) => setDraft(d => ({ ...d, _goalsTouched: true, goals: d.goals.map(g => g.type === type ? { ...g, ...patch } : g) }));
     const tol = draft.tolerance;
     const choice = (id, title, help, extra = {}) => ({
       title, help, valid: Boolean(tol[id]),
@@ -124,7 +139,7 @@ export default function Onboarding({ editing, onSaved, onCancel }) {
                                    value: name, label: name,
                                    hint: `${p.financials.age} years old · ${dollars(p.financials.annual_income)} a year · ${p.goals.map(g => g.name).join(", ")}` }))]}
                        value={draft._persona || ""}
-                       onPick={v => setDraft(v ? { ...meta.personas[v], _persona: v } : { ...meta.blank, _persona: "" })} />,
+                       onPick={v => setDraft(v ? { ...meta.personas[v], _persona: v, _goalsTouched: true } : { ...meta.blank, _persona: "" })} />,
       },
       {
         title: "What is your work situation?",
@@ -177,7 +192,7 @@ export default function Onboarding({ editing, onSaved, onCancel }) {
           <>
             <div className="form-grid">
               <Money label="Cash savings (savings account)" value={fin.cash_savings} step={1000} onChange={v => set("financials", { cash_savings: v })} />
-              <Money label="Amount to invest in the simulation" value={fin.investments} step={1000} onChange={v => set("financials", { investments: v })} />
+              <Money label="Investments you already hold (TFSA, RRSP, funds, stocks)" value={fin.investments} step={1000} onChange={v => set("financials", { investments: v })} />
               <Money label="Other assets, net of mortgage (home, etc.)" value={fin.other_assets} step={1000} onChange={v => set("financials", { other_assets: v })} />
               <Money label="Debts excluding mortgage (student loan, car, cards)" value={fin.debts} step={1000} onChange={v => set("financials", { debts: v })} />
             </div>
@@ -192,7 +207,7 @@ export default function Onboarding({ editing, onSaved, onCancel }) {
       {
         title: "What are you investing for?",
         help: "Each goal has its own horizon, so each gets its own sub-portfolio. Choose one or more.",
-        valid: goals.length > 0 && goals.every(g => g.name.trim()),
+        valid: goals.length > 0 && goals.every(g => g.name.trim()) && assigned <= available + 1,
         body: (
           <>
             <Choices multi options={meta.goal_types} value={goals.map(g => g.type)} hints={GOAL_HINT} onPick={toggleGoal} />
@@ -214,9 +229,17 @@ export default function Onboarding({ editing, onSaved, onCancel }) {
                 </div>
               </div>
             ))}
-            {goals.length > 0 && <p className="analysis-status">
-              Planned savings: <b>{dollars(goals.reduce((s, g) => s + g.monthly_contribution, 0))}</b> a month,
-              for a capacity of <b>{dollars(fin.monthly_savings)}</b>.</p>}
+            {goals.length > 0 && <>
+              <div className="metrics-inline">
+                <div><span>Already set aside for your goals (your simulated portfolio)</span><strong>{dollars(assigned)}</strong></div>
+                <div><span>Cash savings + investments you hold</span><strong>{dollars(available)}</strong></div>
+                <div><span>Planned savings a month</span><strong>{dollars(goals.reduce((s, g) => s + g.monthly_contribution, 0))} of {dollars(fin.monthly_savings)}</strong></div>
+              </div>
+              {assigned > available + 1 && <div className="pill red">
+                The goals count {dollars(assigned - available)} more than your savings and investments. Lower the amounts already set aside.</div>}
+              {assigned <= available + 1 && available - assigned > Math.max(1000, 0.05 * available) && <div className="pill yellow">
+                {dollars(available - assigned)} of your savings and investments is not assigned to a goal, so the plan will not invest it.</div>}
+            </>}
           </>
         ),
       },
@@ -296,7 +319,7 @@ export default function Onboarding({ editing, onSaved, onCancel }) {
     if (!last) { setStep(step + 1); window.scrollTo(0, 0); return; }
     setSaving(true);
     try {
-      const { _persona, ...onboarding } = draft;
+      const { _persona, _goalsTouched, ...onboarding } = draft;
       await api("/profile", { method: "PUT", body: { onboarding } });
       await onSaved();
     } catch (e) { setError(e.message); }
