@@ -961,6 +961,20 @@ def _summarize_receipt(r: dict) -> dict:
         w = out.get("weights") or {}
         plain_title = "Custom Portfolio Validation"
         plain_summary = f"Recorded {len(w)} holdings and checked them against your profile constraints."
+    elif tool == "invest_now_or_wait":
+        inv = out.get("invested", 0)
+        now_v = (out.get("now") or {}).get("average_value", 0)
+        spr_v = (out.get("spread") or {}).get("average_value", 0)
+        sig_v = (out.get("signal") or {}).get("average_value", 0)
+        plain_title = "Entry Timing Study: Invest Now vs. Spread Over 6 Months vs. ML Signal"
+        plain_summary = (
+            f"Tested {money(inv)} CAD across {out.get('starts', 0)} historical start months ({out.get('period', '')}), "
+            f"comparing investing immediately, spreading over {out.get('spread_months', 6)} months, or waiting for the ML timing signal."
+        )
+        key_facts = [
+            f"Average value after {out.get('horizon_months', 12)} months: Invest now {money(now_v)} · Spread {money(spr_v)} · ML signal {money(sig_v)}",
+            f"ML signal beat investing now in {pct((out.get('signal') or {}).get('beats_now_share'), 0)} of start months",
+        ]
     return {
         **r,
         "plain_title": plain_title,
