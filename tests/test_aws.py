@@ -52,12 +52,18 @@ def test_sync_downloads_once(tmp_path):
     assert all(k.startswith("wealthpilot/") for k in s3.downloads)
 
 
-def test_trace_store_round_trip():
+def test_trace_store_round_trip(tmp_path, monkeypatch):
     store = storage.TraceStore(FakeTable())
     store.save_state("s1", {"portfolio": {"XIU.TO": 0.5}})
     assert store.load_state("s1") == {"portfolio": {"XIU.TO": 0.5}}
     sk = store.save_turn("s1", "q", {"report": {"coverage": 1.0}}, [{"id": "R1"}])
     assert sk.startswith("TURN#")
+    for k in ("WEALTHPILOT_DATA_DIR", "WEALTHPILOT_MODEL_PATH", "WEALTHPILOT_FORECAST_PATH", "WEALTHPILOT_TIMING_PATH", "WEALTHPILOT_NEWS_DIR"):
+        monkeypatch.delenv(k, raising=False)
+    storage.configure_paths(tmp_path)
+    import os
+    assert os.environ["WEALTHPILOT_FORECAST_PATH"] == str(tmp_path / "models" / "asset_forecast.json")
+    assert os.environ["WEALTHPILOT_TIMING_PATH"] == str(tmp_path / "models" / "timing_model.json")
 
 
 @needs_files

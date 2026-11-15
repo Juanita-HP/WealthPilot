@@ -141,13 +141,17 @@ def fetch_headlines(ticker: str, count: int = 20, search=None) -> list[Headline]
 
 def save_jsonl(rows: list, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as f:
+    with path.open("w", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r.to_dict() if hasattr(r, "to_dict") else r, ensure_ascii=False) + "\n")
 
 
 def load_jsonl(path: Path) -> list[dict]:
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        text = path.read_text(encoding="cp1252", errors="replace")
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
 # ----------------------------------------------------------------------------- classification
@@ -258,7 +262,7 @@ class LLMClassifier:
         self.llm = llm
         self.version = version
         self.name = f"claude-prompt-{version}"
-        self.system = (PROMPTS_DIR / f"{version}.md").read_text()
+        self.system = (PROMPTS_DIR / f"{version}.md").read_text(encoding="utf-8")
 
     def classify(self, h: dict) -> Label:
         msg = (f"Headline: {h['title']}\nPublisher: {h.get('publisher', '')} (source tier: {h.get('tier', '')})\n"

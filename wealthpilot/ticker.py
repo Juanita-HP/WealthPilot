@@ -75,10 +75,10 @@ class YFinanceSource:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         path = self.cache_dir / f"{key}.json"
         if path.exists() and time.time() - path.stat().st_mtime < self.ttl:
-            blob = json.loads(path.read_text())
+            blob = json.loads(path.read_text(encoding="utf-8"))
         else:
             blob = {"retrieved_at": _now(), "kind": kind, "data": fetch()}
-            path.write_text(json.dumps(blob, default=str))
+            path.write_text(json.dumps(blob, default=str), encoding="utf-8")
         self.retrieved_at[key] = blob["retrieved_at"]
         return blob["data"]
 

@@ -23,8 +23,13 @@ DATA_FILES = {
     "starter/fx_usdcad_daily.csv", "starter/macro_rates.csv", "external/macro_history.csv",
     "models/inflation_model.json",
 }
-# International funds (scripts/fetch_international.py): synced when present, optional.
-OPTIONAL_FILES = {"external/assets_universe_extra.csv", "external/extra_prices.csv"}
+# International funds and optional ML model artifacts: synced when present, optional.
+OPTIONAL_FILES = {
+    "external/assets_universe_extra.csv",
+    "external/extra_prices.csv",
+    "models/asset_forecast.json",
+    "models/timing_model.json",
+}
 
 
 def sync_from_s3(s3, bucket: str, prefix: str, dest: Path) -> list[str]:
@@ -54,6 +59,8 @@ def configure_paths(root: Path) -> None:
     """Point the data and model loaders at a synced directory (before importing them)."""
     os.environ["WEALTHPILOT_DATA_DIR"] = str(root / "starter")
     os.environ["WEALTHPILOT_MODEL_PATH"] = str(root / "models" / "inflation_model.json")
+    os.environ["WEALTHPILOT_FORECAST_PATH"] = str(root / "models" / "asset_forecast.json")
+    os.environ["WEALTHPILOT_TIMING_PATH"] = str(root / "models" / "timing_model.json")
     os.environ.setdefault("WEALTHPILOT_NEWS_DIR", str(root / "news"))  # writable cache for headlines and official texts
 
 

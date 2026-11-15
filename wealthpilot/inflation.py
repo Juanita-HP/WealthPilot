@@ -284,13 +284,13 @@ def train(history: pd.DataFrame, horizons=HORIZONS, first_origin: str = "2008-01
 
 def save(artifact: dict, path: Path = ARTIFACT) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(artifact, indent=2))
+    path.write_text(json.dumps(artifact, indent=2), encoding="utf-8")
 
 
 def load(path: Path = ARTIFACT) -> dict:
     if not path.exists():
         raise FileNotFoundError(f"{path} not found. Run scripts/train_inflation.py.")
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 @dataclass

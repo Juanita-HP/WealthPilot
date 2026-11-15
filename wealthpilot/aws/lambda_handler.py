@@ -11,7 +11,8 @@ Response: the agent answer (text, draft, critique, verification report, trace)
 plus the receipts of this turn. State and the full trace are written to DynamoDB.
 
 Environment: DATA_BUCKET, DATA_PREFIX, TRACE_TABLE, AWS_REGION, WEALTHPILOT_LLM
-(bedrock by default), WEALTHPILOT_MODEL (default anthropic.claude-opus-5-5).
+(bedrock by default), WEALTHPILOT_MODEL (default global.anthropic.claude-haiku-4-5-20251001-v1:0),
+WEALTHPILOT_FALLBACK_MODEL (default global.amazon.nova-2-lite-v1:0).
 """
 
 from __future__ import annotations

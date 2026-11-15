@@ -228,4 +228,4 @@ def load_artifact(path: Path | None = None) -> dict | None:
     path = path or ARTIFACT
     if not path.exists():
         return None
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))

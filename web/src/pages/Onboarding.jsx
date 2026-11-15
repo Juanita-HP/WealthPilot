@@ -317,15 +317,18 @@ export default function Onboarding({ editing, onSaved, onCancel }) {
 
   const s = steps[step];
   const last = step === steps.length - 1;
-  const next = async () => {
-    if (!last) { setStep(step + 1); window.scrollTo(0, 0); return; }
+  const saveNow = async () => {
     setSaving(true);
     try {
-      const { _persona, _goalsTouched, ...onboarding } = draft;
+      const { _goalsTouched, ...onboarding } = draft;
       await api("/profile", { method: "PUT", body: { onboarding } });
       await onSaved();
     } catch (e) { setError(e.message); }
     finally { setSaving(false); }
+  };
+  const next = async () => {
+    if (!last) { setStep(step + 1); window.scrollTo(0, 0); return; }
+    await saveNow();
   };
 
   return (
@@ -347,9 +350,16 @@ export default function Onboarding({ editing, onSaved, onCancel }) {
             {step > 0 && <button type="button" className="quiet-btn" onClick={() => setStep(step - 1)}>← Previous</button>}
             {onCancel && <button type="button" className="quiet-btn" onClick={onCancel}>Cancel</button>}
           </div>
-          <button type="button" className="primary-btn" disabled={!s.valid || saving} onClick={next}>
-            {saving ? "Saving…" : last ? "Save profile & continue →" : "Continue →"}
-          </button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {!last && draft?._persona && (
+              <button type="button" className="quiet-btn" disabled={saving} onClick={saveNow}>
+                {saving ? "Saving…" : `Apply ${draft._persona}'s profile now (skip 14 steps) →`}
+              </button>
+            )}
+            <button type="button" className="primary-btn" disabled={!s.valid || saving} onClick={next}>
+              {saving ? "Saving…" : last ? "Save profile & continue →" : "Continue →"}
+            </button>
+          </div>
         </div>
       </div>
     </section>

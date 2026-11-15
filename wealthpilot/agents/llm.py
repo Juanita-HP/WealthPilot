@@ -17,9 +17,9 @@ import os
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 
-DEFAULT_MODEL = "claude-opus-5-5"
-FALLBACK_MODEL = "claude-opus-4-8"   # used only if the main model declines a request (refusal)
-DEFAULT_EFFORT = "medium"            # Opus 5.5's own default, set explicitly
+DEFAULT_MODEL = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+FALLBACK_MODEL = "global.amazon.nova-2-lite-v1:0"   # used only if the main model declines a request (refusal)
+DEFAULT_EFFORT = "medium"
 
 
 class LLM:
@@ -48,21 +48,96 @@ class _AnthropicBase(LLM):
         raise NotImplementedError
 
 
-class BedrockLLM(_AnthropicBase):
-    """Claude on Amazon Bedrock (Mantle client). Credentials come from the standard AWS chain
-    (environment, profile, or the Lambda execution role)."""
+def _to_converse_messages(messages: list) -> list[dict]:
+    out = []
+    for m in messages:
+        c = m["content"]
+        if isinstance(c, str):
+            blocks = [{"text": c}]
+        else:
+            blocks = []
+            for b in c:
+                if isinstance(b, dict):
+                    if b.get("type") == "tool_result":
+                        blocks.append({
+                            "toolResult": {
+                                "toolUseId": b["tool_use_id"],
+                                "content": [{"text": str(b["content"])}],
+                                "status": "error" if b.get("is_error") else "success",
+                            }
+                        })
+                    elif b.get("type") == "text" and b.get("text"):
+                        blocks.append({"text": b["text"]})
+                else:
+                    if getattr(b, "type", None) == "text" and getattr(b, "text", ""):
+                        blocks.append({"text": b.text})
+                    elif getattr(b, "type", None) == "tool_use":
+                        blocks.append({
+                            "toolUse": {
+                                "toolUseId": b.id,
+                                "name": b.name,
+                                "input": dict(b.input or {}),
+                            }
+                        })
+        if blocks:
+            out.append({"role": m["role"], "content": blocks})
+    return out
+
+
+class BedrockLLM(LLM):
+    """Amazon Bedrock Converse API client (boto3). Credentials come from the standard AWS chain
+    (environment, ~/.aws/credentials, or the Lambda execution role)."""
+
+    max_tokens: int = 4096
 
     def __init__(self, region: str | None = None, model: str | None = None, fallback: str | None = FALLBACK_MODEL):
-        from anthropic import AnthropicBedrockMantle, BetaRefusalFallbackMiddleware
+        import boto3
+        from botocore.config import Config
 
-        self.model = model or f"anthropic.{DEFAULT_MODEL}"
-        middleware = [BetaRefusalFallbackMiddleware([{"model": f"anthropic.{fallback}"}])] if fallback else []
-        self.client = AnthropicBedrockMantle(aws_region=region or os.environ.get("AWS_REGION", "ca-central-1"),
-                                             middleware=middleware)
+        self.region = region or os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
+        self.model = model or DEFAULT_MODEL
+        self.fallback = fallback
+        cfg = Config(region_name=self.region, retries={"max_attempts": 5, "mode": "adaptive"}, read_timeout=120)
+        self.client = boto3.client("bedrock-runtime", config=cfg)
 
-    def _send(self, **kwargs):
-        # Server-side fallbacks are not available on Bedrock; the client middleware retries refusals.
-        return self.client.beta.messages.create(**kwargs)
+    def _call(self, model_id: str, system: str, messages: list, tools: list[dict]):
+        kwargs = {
+            "modelId": model_id,
+            "system": [{"text": system}],
+            "messages": _to_converse_messages(messages),
+            "inferenceConfig": {"maxTokens": self.max_tokens, "temperature": 0.2},
+        }
+        if tools:
+            kwargs["toolConfig"] = {
+                "tools": [
+                    {
+                        "toolSpec": {
+                            "name": t["name"],
+                            "description": t["description"],
+                            "inputSchema": {"json": t["input_schema"]},
+                        }
+                    }
+                    for t in tools
+                ]
+            }
+        resp = self.client.converse(**kwargs)
+        stop = resp.get("stopReason", "end_turn")
+        if stop in ("guardrail_intervened", "content_filtered"):
+            stop = "refusal"
+        blocks = []
+        for item in resp.get("output", {}).get("message", {}).get("content", []):
+            if "text" in item and item["text"]:
+                blocks.append(text_block(item["text"]))
+            elif "toolUse" in item:
+                tu = item["toolUse"]
+                blocks.append(tool_block(tu["name"], dict(tu.get("input") or {}), tu["toolUseId"]))
+        return SimpleNamespace(content=blocks, stop_reason=stop)
+
+    def create(self, system: str, messages: list, tools: list[dict], effort: str | None = None):
+        resp = self._call(self.model, system, messages, tools)
+        if resp.stop_reason == "refusal" and self.fallback:
+            return self._call(self.fallback, system, messages, tools)
+        return resp
 
 
 class AnthropicLLM(_AnthropicBase):
@@ -84,10 +159,12 @@ class AnthropicLLM(_AnthropicBase):
 def from_env() -> LLM:
     """WEALTHPILOT_LLM = bedrock (default) | anthropic."""
     kind = os.environ.get("WEALTHPILOT_LLM", "bedrock")
+    model = os.environ.get("WEALTHPILOT_MODEL")
+    fallback = os.environ.get("WEALTHPILOT_FALLBACK_MODEL") or FALLBACK_MODEL
     if kind == "bedrock":
-        return BedrockLLM(model=os.environ.get("WEALTHPILOT_MODEL"))
+        return BedrockLLM(model=model, fallback=fallback)
     if kind == "anthropic":
-        return AnthropicLLM(model=os.environ.get("WEALTHPILOT_MODEL"))
+        return AnthropicLLM(model=model, fallback=fallback)
     raise ValueError(f"unknown WEALTHPILOT_LLM={kind!r}")
 
 

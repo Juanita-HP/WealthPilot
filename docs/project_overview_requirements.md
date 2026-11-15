@@ -33,14 +33,14 @@ The risk map covers **market, credit, liquidity, currency, concentration and inf
 - **Performance:** the demonstration should be responsive; **no measured response-time SLA is claimed**.
 
 ### 5. Architecture, Project Risks & Boundaries
-**Stack:** Streamlit; Python/pandas/NumPy/Plotly; public starter data (31 assets), FX and macro sources; Claude agent clients and AWS Bedrock/Lambda/S3/DynamoDB integration code. **Live AWS deployment is not yet verified.**
+**Stack:** React 18 + Vite (`web/`) and FastAPI (`wealthpilot/api.py`); Python/pandas/NumPy/Chart.js/Matplotlib; public starter data (31 assets), FX and macro sources; multi-agent orchestration powered by Amazon Bedrock Converse API (`global.anthropic.claude-haiku-4-5-20251001-v1:0` with `global.amazon.nova-2-lite-v1:0` fallback), Amazon S3 (`wealthpilot-polyfinances-008971659304`), Amazon DynamoDB (`wealthpilot-traces`), and AWS Lambda container deployment (`us-east-1`). **Live AWS Bedrock, S3, and DynamoDB integration is provisioned and verified end-to-end.**
 
-**Risks/limits:** five-year market history, survivorship bias, revised data, incomplete ESG coverage, model uncertainty, AWS access/deployment.
+**Risks/limits:** five-year market history, survivorship bias, revised data, incomplete ESG coverage, model uncertainty.
 
 **Educational simulation only:** no real trades, brokerage connection, guaranteed returns or regulated financial advice.
 
 ### 6. Success Criteria
-- Demonstrate **Amira, Mateo and Robert** with coherent, different, explainable outcomes and enforced constraints.
-- Validate classification against persona tests and **600 synthetic profiles**; check risk calculations and portfolio rules through automated tests.
-- Evaluate estimated methods using **out-of-sample / walk-forward** comparisons; report **MAE** for inflation and **accuracy/precision/recall** for news classification where applicable.
-- Demonstrate a functioning browser workflow and **one real AWS-backed agent call** before claiming deployment; deliver README, technical documentation, one-pager and ~5-minute demo video
+- Demonstrate **Amira, Mateo and Robert** with coherent, different, explainable outcomes and enforced constraints (including 1-click persona loading in the UI).
+- Validate classification against persona tests and **600 synthetic profiles**; check risk calculations and portfolio rules through automated tests (`pytest`).
+- Evaluate estimated methods using **out-of-sample / walk-forward** comparisons; report **MAE** for inflation (`docs/model_card_inflation.md`), out-of-sample walk-forward results for market timing (`models/model_card_timing.md`) and crypto/gold forecasting (`models/model_card_asset_forecast.md`), and **accuracy/precision/recall** for news classification (`docs/news_eval.md`, `docs/macro_eval.md`).
+- Demonstrate a functioning browser workflow and **live AWS-backed multi-agent calls with auditable receipts (`[R1]`, `[R2]`, ...) and DynamoDB trace logging**; deliver README, technical documentation, one-pager and ~5-minute demo video.

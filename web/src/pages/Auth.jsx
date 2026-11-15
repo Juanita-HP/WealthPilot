@@ -9,6 +9,19 @@ export default function Auth({ onSignedIn }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const demoSignIn = async persona => {
+    setError("");
+    setBusy(true);
+    try {
+      const r = await api("/auth/demo/" + persona, { method: "POST" });
+      await onSignedIn(r.token);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = async e => {
     e.preventDefault();
     setError("");
@@ -66,6 +79,27 @@ export default function Auth({ onSignedIn }) {
           </button>
         </div>
       </form>
+      <div className="question-card" style={{ marginTop: 18 }}>
+        <div className="eyebrow" style={{ marginTop: 0 }}>INSTANT DEMO PERSONAS · 1-CLICK SIGN IN</div>
+        <h2 style={{ marginTop: 6, fontSize: 18 }}>Explore a case persona in one click</h2>
+        <p className="muted small" style={{ marginTop: 4 }}>
+          Skip the 14-question onboarding and jump straight into the plan, time machine, and AI agents with one of the three benchmark personas:
+        </p>
+        <div className="choices three" style={{ marginTop: 12 }}>
+          <button type="button" className="choice" disabled={busy} onClick={() => demoSignIn("Amira")}>
+            <strong>Amira · 26 yrs</strong>
+            <small>Growth (8/10 risk) · $95k income · Long-term growth (20 yrs) · Tech & crypto</small>
+          </button>
+          <button type="button" className="choice" disabled={busy} onClick={() => demoSignIn("Mateo")}>
+            <strong>Mateo · 41 yrs</strong>
+            <small>Balanced (6/10 risk) · $110k income · Children's education & Retirement · Strict ESG (no fossil fuels)</small>
+          </button>
+          <button type="button" className="choice" disabled={busy} onClick={() => demoSignIn("Robert")}>
+            <strong>Robert · 59 yrs</strong>
+            <small>Moderate goal cap (4/10 risk) · $140k income · Retirement in 4 yrs · Capital preservation</small>
+          </button>
+        </div>
+      </div>
     </section>
   );
 }

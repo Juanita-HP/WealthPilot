@@ -192,6 +192,34 @@ def login(c: Credentials):
     return {"token": make_token(u), "username": u}
 
 
+def _clear_user_cache(user: str) -> None:
+    with INSIGHT_CACHE.lock:
+        for k in [k for k in INSIGHT_CACHE.store if isinstance(k, tuple) and k and k[0] == user]:
+            INSIGHT_CACHE.store.pop(k, None)
+
+
+def _match_persona(persona: str) -> tuple[str, ob.Onboarding]:
+    target = persona.strip().lower()
+    for name, o in ob.PERSONAS.items():
+        if name.lower() == target:
+            return name, o
+    raise HTTPException(404, f"Unknown persona {persona!r}. Choose from: {', '.join(ob.PERSONAS)}.")
+
+
+@app.post("/api/auth/demo/{persona}")
+def demo_login(persona: str):
+    """1-click demo persona sign-in: creates/updates the demo account, saves the persona profile, and signs in."""
+    name, o = _match_persona(persona)
+    u = f"demo_{name.lower()}"
+    try:
+        accounts.create_user(u, "wealthpilot-demo-2026")
+    except accounts.AccountError:
+        pass
+    accounts.save_profile(u, {**o.to_dict(), "persona": name})
+    _clear_user_cache(u)
+    return {"token": make_token(u), "username": u, "persona": name}
+
+
 @app.get("/api/me")
 def me(user: str = Depends(current_user)):
     return {"username": user, "has_profile": bool(accounts.load_profile(user))}
@@ -403,7 +431,8 @@ def get_profile(user: str = Depends(current_user)):
     o = to_onboarding(saved)
     p = ob.build_profile(o)
     chosen = int(saved.get("chosen_level", p.level))
-    return {"onboarding": o.to_dict(), "chosen_level": min(chosen, p.level), "profile": profile_summary(p, all_flags=True),
+    return {"onboarding": o.to_dict(), "persona": saved.get("persona"),
+            "chosen_level": min(chosen, p.level), "profile": profile_summary(p, all_flags=True),
             "financials": o.financials.to_dict(),
             "levels": [{"level": n, "name": level_name(n)} for n in range(1, p.level + 1)]}
 
@@ -413,13 +442,26 @@ def put_profile(d: Draft, user: str = Depends(current_user)):
     o = to_onboarding(d.onboarding)
     if not o.goals:
         raise HTTPException(400, "Choose at least one goal.")
-    accounts.save_profile(user, o.to_dict())
+    persona = d.onboarding.get("_persona") or None
+    payload = {**o.to_dict(), **({"persona": persona} if persona in ob.PERSONAS else {})}
+    accounts.save_profile(user, payload)
+    _clear_user_cache(user)
     return {"saved": True}
+
+
+@app.post("/api/profile/persona/{persona}")
+def apply_persona(persona: str, user: str = Depends(current_user)):
+    """1-click persona switcher for a signed-in user (Amira, Mateo, Robert)."""
+    name, o = _match_persona(persona)
+    accounts.save_profile(user, {**o.to_dict(), "persona": name})
+    _clear_user_cache(user)
+    return {"saved": True, "persona": name}
 
 
 @app.delete("/api/profile")
 def delete_profile(user: str = Depends(current_user)):
     accounts.delete_profile(user)
+    _clear_user_cache(user)
     return {"deleted": True}
 
 
@@ -433,6 +475,7 @@ def set_level(lv: Level, user: str = Depends(current_user)):
     if not saved:
         raise HTTPException(404, "No profile yet.")
     accounts.save_profile(user, {**saved, "chosen_level": int(lv.level)})
+    _clear_user_cache(user)
     return {"chosen_level": int(lv.level)}
 
 
@@ -715,6 +758,218 @@ class Question(BaseModel):
     question: str
 
 
+def _summarize_receipt(r: dict) -> dict:
+    """Build a beginner-friendly plain-English summary of a tool receipt so any user can audit the numbers."""
+    tool = r.get("tool", "")
+    agent = r.get("agent", "advisor")
+    agent_label = "Devil's Advocate Agent" if agent == "advocate" else "Advisor Agent"
+    inp = r.get("inputs") or {}
+    out = r.get("output") or {}
+    if r.get("error"):
+        return {
+            **r,
+            "plain_title": f"Tool check ({tool})",
+            "agent_label": agent_label,
+            "plain_summary": f"Attempted to run {tool}, which returned a notice: {r['error']}",
+            "key_facts": [],
+        }
+
+    plain_title = f"Calculation ({tool})"
+    plain_summary = "Verified calculation from the WealthPilot engine."
+    key_facts: list[str] = []
+
+    if tool == "investor_context":
+        plain_title = "Your Investor Profile, Goals & Safety Limits"
+        lvl = out.get("level_name", f"Level {out.get('level', '?')}")
+        sc10 = out.get("score_10")
+        amt = out.get("amount_cad", 0)
+        c = out.get("constraints") or {}
+        lim = c.get("limits") or {}
+        eq_min = pct(c.get("equity_min"), 0)
+        eq_max = pct(c.get("equity_max"), 0)
+        max_single = pct(lim.get("max_single_security"), 0)
+        max_sec = pct(lim.get("max_sector"), 0)
+        goals = out.get("goals") or []
+        plain_summary = (
+            f"Loaded your profile ({lvl}" + (f", {sc10}/10 risk" if sc10 is not None else "") +
+            f") and your simulated portfolio of {money(amt)} CAD."
+        )
+        key_facts = [
+            f"Profile level: {lvl}" + (f" ({sc10}/10 risk, capacity {out.get('capacity', 0):.0f}/100, tolerance {out.get('tolerance', 0):.0f}/100)" if sc10 is not None else ""),
+            f"Safety rules: {eq_min}–{eq_max} in stocks, max {max_single} in one company, max {max_sec} in one sector",
+        ]
+        if goals:
+            key_facts.append("Goals: " + "; ".join(
+                f"{g['name']} (horizon {g['horizon_years']:g} yrs, target {money(g['target_amount'])})" for g in goals
+            ))
+    elif tool == "ticker_overview":
+        sym = inp.get("symbol") or (out.get("identity") or {}).get("ticker") or "Asset"
+        name = (out.get("identity") or {}).get("name") or sym
+        plain_title = f"Market & Fit Check for {name} ({sym})"
+        rets = out.get("returns") or {}
+        rsk = out.get("risk") or {}
+        fit = out.get("fit_score") or {}
+        r1y = (rets.get("1Y") or {}).get("value")
+        cagr = (rets.get("CAGR_full") or {}).get("value")
+        vol = (rsk.get("volatility_full") or {}).get("value")
+        mdd = (rsk.get("max_drawdown") or {}).get("value")
+        fscore = fit.get("score")
+        flabel = fit.get("label") or "—"
+        plain_summary = (
+            f"Measured real historical performance and risk for {name} ({sym}) in CAD and scored how well it fits your profile."
+        )
+        key_facts = [
+            f"1-year return: {pct(r1y, 1)} · 5-year annual return (CAGR): {pct(cagr, 1)}",
+            f"Annual price swings (volatility): {pct(vol, 1)} · Worst historical drop: {pct(mdd, 1)}",
+            f"Profile fit score: {fscore:.0f}/100 ({flabel})" if fscore is not None else f"Profile fit: {flabel}",
+        ]
+    elif tool == "review_trade":
+        sym = out.get("symbol") or inp.get("symbol", "Asset")
+        w = out.get("requested_weight", inp.get("weight", 0))
+        verdict = out.get("verdict", "reviewed")
+        chals = out.get("challenges") or []
+        ba = out.get("before_after") or {}
+        bef = ba.get("before") or {}
+        aft = ba.get("after") or {}
+        plain_title = f"Devil's Advocate Trade Test: {pct(w, 0)} in {sym}"
+        plain_summary = (
+            f"Simulated putting {pct(w, 0)} of your portfolio into {sym}. Verdict: '{verdict.capitalize()}' "
+            f"with {len(chals)} risk/rule check(s) triggered."
+        )
+        if bef and aft:
+            key_facts.append(
+                f"Annual return (2021–2026): {pct(bef.get('cagr'), 1)} before → {pct(aft.get('cagr'), 1)} after"
+            )
+            key_facts.append(
+                f"Worst temporary drop: {pct(bef.get('max_drawdown'), 1)} before → {pct(aft.get('max_drawdown'), 1)} after"
+            )
+            key_facts.append(
+                f"Annual volatility: {pct(bef.get('volatility'), 1)} before → {pct(aft.get('volatility'), 1)} after"
+            )
+        if chals:
+            key_facts.append("Flags raised: " + ", ".join(c.get("code", "") for c in chals[:4]))
+    elif tool == "review_allocation":
+        verdict = out.get("verdict", "reviewed")
+        chals = out.get("challenges") or []
+        plain_title = "Portfolio Rules & Diversification Check"
+        plain_summary = (
+            f"Audited the portfolio against your profile's stock, sector, and single-company limits. "
+            f"Verdict: '{verdict.capitalize()}' ({len(chals)} alert(s))."
+        )
+        for c in chals[:3]:
+            key_facts.append(f"{c.get('code', 'Alert')}: {c.get('claim', '')}")
+    elif tool == "propose_allocation":
+        w = out.get("weights") or {}
+        plain_title = "Recommended ETF Portfolio Allocation"
+        plain_summary = f"Built a diversified policy allocation across {len(w)} low-cost index funds for your risk level."
+        top = ", ".join(f"{k} ({pct(v, 0)})" for k, v in sorted(w.items(), key=lambda x: -x[1])[:5])
+        if top:
+            key_facts.append(f"Holdings: {top}")
+    elif tool == "replay_history":
+        amt = out.get("amount", 0)
+        fin = out.get("final_value", 0)
+        cagr = out.get("cagr")
+        wd = out.get("worst_drawdown") or {}
+        plain_title = "Time-Machine Historical Replay (2021–2026)"
+        plain_summary = (
+            f"Replayed {money(amt)} CAD through real 2021–2026 market history: ending at {money(fin)} CAD ({pct(cagr, 1)}/yr)."
+        )
+        if wd:
+            key_facts.append(
+                f"Worst drop: {pct(wd.get('max_drawdown'), 1)} ({money(wd.get('dollars_lost', 0))} lost at the bottom on {wd.get('trough_date', '')})"
+            )
+    elif tool == "risk_map":
+        rlist = out.get("risks") or []
+        plain_title = "6-Dimension Portfolio Risk Map"
+        plain_summary = "Measured market, credit, liquidity, currency, concentration, and inflation risks on your portfolio."
+        for rk in rlist[:4]:
+            key_facts.append(f"{rk.get('kind', '').capitalize()} risk ({rk.get('level', '')}): {pct(rk.get('value'), 1)}")
+    elif tool == "news_digest":
+        sym = out.get("ticker") or inp.get("symbol", "Asset")
+        cnt = out.get("n", out.get("count", 0))
+        hype = out.get("hype_share")
+        pred_sh = out.get("share_predictive")
+        plain_title = f"News & Hype Analysis for {sym}"
+        plain_summary = (
+            f"Checked {cnt} recent headlines on {sym}, separating factual reports from predictions/opinions "
+            f"(opinion/prediction share: {pct(pred_sh, 0)}, low-trust hype share: {pct(hype, 0)})."
+        )
+        top_desc = out.get("top_descriptive") or []
+        if top_desc:
+            key_facts.append(f"Top factual report ({top_desc[0].get('publisher', 'Source')}): \"{top_desc[0].get('title', '')}\"")
+        if out.get("controversies"):
+            key_facts.append(f"ESG/regulatory headlines flagged: {len(out['controversies'])}")
+    elif tool == "macro_news_impact":
+        items = out.get("items") or []
+        plain_title = "Official Central Bank & Economic News Impact"
+        plain_summary = (
+            f"Analyzed {len(items)} official releases from the Bank of Canada, Federal Reserve, and Statistics Canada "
+            f"and measured how much of your portfolio is exposed."
+        )
+    elif tool == "inflation_forecast":
+        h = out.get("horizon_months") or inp.get("horizon_months", 12)
+        plain_title = f"Canadian CPI Inflation Forecast ({h} months)"
+        plain_summary = (
+            f"Walk-forward CPI forecast {h} months ahead: {out.get('forecast', 0):.2f}% "
+            f"(80% range: {out.get('low', 0):.2f}% to {out.get('high', 0):.2f}%) vs. {out.get('current_yoy', 0):.2f}% currently."
+        )
+    elif tool == "what_would_change":
+        conds = out.get("conditions") or []
+        plain_title = "What Would Change This Recommendation"
+        plain_summary = f"Computed {len(conds)} concrete tipping points (horizon, cushion, or risk level changes) that would alter the plan."
+        for c in conds[:3]:
+            key_facts.append(f"{c.get('condition', '')} → {c.get('effect', '')}")
+    elif tool == "stress_test":
+        scens = out.get("scenarios") or []
+        plain_title = "Hypothetical Crisis Stress Tests"
+        plain_summary = f"Tested your portfolio across {len(scens)} extreme market shock scenarios and 10-year inflation erosion."
+        for sc in scens[:3]:
+            key_facts.append(f"{sc.get('label', sc.get('scenario', 'Shock'))}: {pct(sc.get('portfolio_return'), 1)} ({money(sc.get('dollars', 0))})")
+    elif tool == "strategy_lab":
+        res = out.get("result") or {}
+        sym = res.get("symbol") or inp.get("symbol", "Asset")
+        strat = res.get("strategy") or inp.get("strategy", "rule")
+        so = res.get("out_of_sample") or {}
+        bo = res.get("buy_hold_out_of_sample") or {}
+        plain_title = f"Strategy Lab Out-of-Sample Test: {strat} on {sym}"
+        plain_summary = (
+            f"Tuned {strat} on 70% of {sym} history and tested out-of-sample on the remaining 30% against buy-and-hold."
+        )
+        if so and bo:
+            key_facts.append(f"Out-of-sample total return: rule {pct(so.get('total_return'), 1)} vs. buy-and-hold {pct(bo.get('total_return'), 1)}")
+            key_facts.append(f"Out-of-sample Sharpe ratio: rule {so.get('sharpe', 0):.2f} vs. buy-and-hold {bo.get('sharpe', 0):.2f}")
+    elif tool == "compare_allocations":
+        rows = out.get("table") or []
+        plain_title = "Side-by-Side Portfolio Backtest Comparison"
+        plain_summary = f"Compared {len(rows)} candidate allocations on the same 2021–2026 CAD historical window."
+        for row in rows[:3]:
+            key_facts.append(
+                f"{row.get('portfolio', row.get('index', 'Portfolio'))}: CAGR {pct(row.get('cagr'), 1)}, worst fall {pct(row.get('max_drawdown'), 1)}"
+            )
+    elif tool == "plan_goals":
+        gls = out.get("goals") or []
+        plain_title = "Goal-by-Goal Investment Plan"
+        plain_summary = f"Built dedicated sub-portfolios and account recommendations across {len(gls)} financial goal(s)."
+        for g in gls[:3]:
+            goal_info = g.get("goal") or {}
+            key_facts.append(f"{goal_info.get('name', 'Goal')}: Level {g.get('level')} ({g.get('level_name', '')}) in {g.get('account', '')}")
+    elif tool == "build_profile":
+        lvl = out.get("level_name", f"Level {out.get('level', '?')}")
+        plain_title = "Questionnaire Risk Profile Scoring"
+        plain_summary = f"Scored your answers into {lvl} (capacity {out.get('capacity', 0):.0f}/100, tolerance {out.get('tolerance', 0):.0f}/100)."
+    elif tool == "set_portfolio":
+        w = out.get("weights") or {}
+        plain_title = "Custom Portfolio Validation"
+        plain_summary = f"Recorded {len(w)} holdings and checked them against your profile constraints."
+    return {
+        **r,
+        "plain_title": plain_title,
+        "agent_label": agent_label,
+        "plain_summary": plain_summary,
+        "key_facts": key_facts,
+    }
+
+
 @app.post("/api/ask")
 def ask(q: Question, user: str = Depends(current_user)):
     if not (os.environ.get("WEALTHPILOT_LLM") or os.environ.get("ANTHROPIC_API_KEY")):
@@ -723,10 +978,56 @@ def ask(q: Question, user: str = Depends(current_user)):
     from .agents import Session, ask as run
     from .agents.llm import from_env
     st = user_state(user)
+    u = market()["universe"]
     sess = Session.from_starter()
     sess.profile, sess.portfolio, sess.amount = st["effective"], st["weights"], st["plan"].total_amount
-    ans = run(sess, q.question, from_env())
-    return jsonable({"text": ans.text, "receipts": [x.to_dict() for x in sess.ledger.receipts]})
+    fin = st["onboarding"].financials
+    card = pf.level_card(sess.profile.level)
+    sess.ledger.record("investor_context", "advisor", {"amount": sess.amount}, jsonable({
+        "level": sess.profile.level,
+        "level_name": sess.profile.level_name,
+        "score_10": card["score_10"],
+        "capacity": round(sess.profile.capacity, 1),
+        "tolerance": round(sess.profile.tolerance, 1),
+        "experience": sess.profile.experience,
+        "age": fin.age,
+        "emergency_months": round(fin.emergency_months, 1),
+        "financials": fin.to_dict(),
+        "amount_cad": sess.amount,
+        "goals": [asdict(g) for g in st["onboarding"].goals],
+        "constraints": sess.profile.constraints.to_dict(),
+        "preferences": asdict(sess.profile.preferences),
+        "current_portfolio_weights": sess.portfolio,
+        "current_portfolio_holdings": [
+            {"ticker": k, "name": str(u.loc[k, "name"]) if k in u.index else k, "weight": v}
+            for k, v in sorted(sess.portfolio.items(), key=lambda x: -x[1])
+        ],
+    }))
+    ans = run(sess, q.question, from_env(), debate=False)
+    raw_receipts = [x.to_dict() for x in sess.ledger.receipts]
+    receipts = [_summarize_receipt(x) for x in raw_receipts]
+    aws_trace_id = None
+    trace_table = os.environ.get("TRACE_TABLE") or os.environ.get("WEALTHPILOT_TRACE_TABLE")
+    if trace_table:
+        try:
+            import boto3
+            from .aws.storage import TraceStore
+            region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
+            table = boto3.resource("dynamodb", region_name=region).Table(trace_table)
+            aws_trace_id = TraceStore(table).save_turn(user, q.question, ans.to_dict(), raw_receipts)
+        except Exception:
+            aws_trace_id = None
+    return jsonable({
+        "text": ans.text,
+        "draft": ans.draft,
+        "critique": ans.critique,
+        "receipts": receipts,
+        "report": ans.report.to_dict(),
+        "revisions": ans.revisions,
+        "trace": ans.trace,
+        "aws_trace_id": aws_trace_id,
+        "aws_trace_table": trace_table if aws_trace_id else None,
+    })
 
 
 # ----------------------------------------------------------------------------- errors and the built interface
@@ -754,6 +1055,9 @@ def spa(path: str):
 
 def main() -> None:
     import uvicorn
+    os.environ.setdefault("WEALTHPILOT_LLM", "bedrock")
+    os.environ.setdefault("AWS_REGION", "us-east-1")
+    os.environ.setdefault("TRACE_TABLE", "wealthpilot-traces")
     uvicorn.run("wealthpilot.api:app", host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", 8000)))
 
 

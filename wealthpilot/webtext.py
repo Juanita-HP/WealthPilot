@@ -191,7 +191,11 @@ class Fetcher:
         path = self._cache_path(url)
         if path is None or not path.exists():
             return None
-        d = json.loads(path.read_text())
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            raw = path.read_text(encoding="cp1252", errors="replace")
+        d = json.loads(raw)
         if datetime.fromisoformat(d["fetched_at"]) < datetime.now(timezone.utc) - self.max_age:
             return None
         return Page(**d)
@@ -200,7 +204,7 @@ class Fetcher:
         path = self._cache_path(page.url)
         if path is not None and page.status in ("ok", "robots_disallow", "paywall", "too_short"):
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(page.to_dict(), ensure_ascii=False))
+            path.write_text(json.dumps(page.to_dict(), ensure_ascii=False), encoding="utf-8")
         return page
 
     # main entry -----------------------------------------------------------------

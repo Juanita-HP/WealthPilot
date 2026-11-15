@@ -3,6 +3,98 @@ import { api, pct } from "../lib.js";
 
 const METRICS = [["cagr", "Annual return", true], ["volatility", "Volatility", true], ["max_drawdown", "Worst fall", true], ["sharpe", "Sharpe ratio", false]];
 
+function renderInline(text) {
+  const parts = String(text).split(/(\*\*[^*]+\*\*|\[R\d+(?:,\s*R\d+)*\]|_[^_]+_)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i}>{renderInline(part.slice(2, -2))}</strong>;
+    }
+    if (/^\[R\d+(?:,\s*R\d+)*\]$/.test(part)) {
+      const ids = part.slice(1, -1).split(",").map(s => s.trim()).filter(Boolean);
+      return (
+        <span key={i} style={{ display: "inline-flex", gap: 3, marginLeft: 3, verticalAlign: "baseline" }}>
+          {ids.map(rid => (
+            <button
+              key={rid}
+              type="button"
+              onClick={e => {
+                e.preventDefault();
+                const el = document.getElementById(`receipt-${rid}`);
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+              }}
+              title={`Verified calculation receipt ${rid} — click to inspect the plain-language summary below`}
+              style={{
+                fontSize: 11, padding: "1px 6px", borderRadius: 4, textDecoration: "none",
+                background: "rgba(23,32,37,0.09)", color: "#2b5876", fontWeight: 700,
+                border: "1px solid rgba(43,88,118,0.22)", cursor: "pointer", lineHeight: 1.35,
+              }}
+            >
+              {rid}
+            </button>
+          ))}
+        </span>
+      );
+    }
+    if (part.startsWith("_") && part.endsWith("_") && part.length > 2) {
+      return <em key={i} className="muted small">{part.slice(1, -1)}</em>;
+    }
+    return part;
+  });
+}
+
+function FormattedAnswer({ text }) {
+  const lines = String(text || "").split(/\r?\n/);
+  const elements = [];
+  let listItems = [];
+  const flushList = (key) => {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={"ul-" + key} style={{ margin: "8px 0 12px 20px", padding: 0, lineHeight: 1.65 }}>
+          {listItems.map((item, idx) => <li key={idx} style={{ marginBottom: 6 }}>{renderInline(item)}</li>)}
+        </ul>
+      );
+      listItems = [];
+    }
+  };
+  lines.forEach((raw, idx) => {
+    const line = raw.trim();
+    if (!line) {
+      flushList(idx);
+      return;
+    }
+    if (/^---+$/.test(line)) {
+      flushList(idx);
+      elements.push(<hr key={idx} style={{ border: "none", borderTop: "1px solid rgba(0,0,0,0.1)", margin: "16px 0" }} />);
+      return;
+    }
+    const hMatch = line.match(/^(#{1,4})\s+(.*)$/);
+    if (hMatch) {
+      flushList(idx);
+      elements.push(
+        <h3 key={idx} style={{ fontSize: 16, fontWeight: 700, margin: "16px 0 6px" }}>
+          {renderInline(hMatch[2])}
+        </h3>
+      );
+      return;
+    }
+    const bMatch = line.match(/^[-*•]\s+(.*)$/);
+    if (bMatch) {
+      listItems.push(bMatch[1]);
+      return;
+    }
+    flushList(idx);
+    elements.push(
+      <p key={idx} style={{ margin: "8px 0", lineHeight: 1.65 }}>
+        {renderInline(line)}
+      </p>
+    );
+  });
+  flushList("end");
+  return <div style={{ fontSize: 14, marginTop: 16 }}>{elements}</div>;
+}
+
 export default function Advocate() {
   const [universe, setUniverse] = useState([]);
   // A stock sent from its research page ("Challenge this stock with the Devil's Advocate").
@@ -112,7 +204,127 @@ export default function Advocate() {
         <div className="question-actions"><span /><button className="primary-btn" disabled={!question.trim() || answer?.loading} onClick={ask}>
           {answer?.loading ? "The agents are working…" : "Ask →"}</button></div>
         {answer?.error && <div className="analysis-status">{answer.error}</div>}
-        {answer?.text && <div style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.7, marginTop: 16 }}>{answer.text}</div>}
+        {answer?.text && (
+          <>
+            <FormattedAnswer text={answer.text} />
+            {answer.receipts?.length > 0 && (
+              <div
+                style={{
+                  marginTop: 20,
+                  padding: "16px 18px",
+                  borderRadius: 12,
+                  background: "rgba(43, 88, 118, 0.05)",
+                  border: "1px solid rgba(43, 88, 118, 0.18)",
+                }}
+              >
+                <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <div>
+                    <div className="eyebrow" style={{ marginBottom: 2 }}>BEGINNER'S VERIFICATION GUIDE · CALCULATION RECEIPTS</div>
+                    <h3 style={{ margin: 0, fontSize: 16 }}>What do the [R1], [R2] badges mean?</h3>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    {answer.report && (
+                      <span className={"pill " + (answer.report.passed ? "green" : "yellow")} style={{ margin: 0, fontSize: 12 }}>
+                        {answer.report.passed
+                          ? `✓ ${answer.report.claims?.filter(c => c.status === "verified").length || 0}/${answer.report.claims?.length || 0} figures verified by code`
+                          : `Verifier checked ${answer.report.claims?.length || 0} figures`}
+                      </span>
+                    )}
+                    {answer.aws_trace_id && (
+                      <span
+                        className="pill info"
+                        style={{ margin: 0, fontSize: 12 }}
+                        title={`Logged in Amazon DynamoDB table ${answer.aws_trace_table || "wealthpilot-traces"}`}
+                      >
+                        AWS DynamoDB Audit: {answer.aws_trace_id}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <p className="small muted" style={{ margin: "8px 0 14px", lineHeight: 1.55 }}>
+                  In WealthPilot, AI agents are <b>never allowed to invent or calculate numbers on their own</b>. Every time the
+                  Advisor or Devil's Advocate cites a badge like <b>R1</b> or <b>R2</b>, that number comes directly from one of the
+                  verified calculator "receipts" summarized in plain language below—and a deterministic code verifier checks every
+                  single number before you see the answer.
+                </p>
+                <div style={{ display: "grid", gap: 10 }}>
+                  {answer.receipts.map(r => (
+                    <div
+                      key={r.id}
+                      id={`receipt-${r.id}`}
+                      style={{
+                        padding: "12px 14px",
+                        borderRadius: 8,
+                        background: "#fff",
+                        border: "1px solid rgba(0,0,0,0.08)",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                        <div>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              padding: "2px 7px",
+                              marginRight: 8,
+                              borderRadius: 4,
+                              background: "rgba(43,88,118,0.12)",
+                              color: "#2b5876",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {r.id}
+                          </span>
+                          <strong style={{ fontSize: 14 }}>{r.plain_title || r.tool}</strong>
+                        </div>
+                        <span className="muted small">{r.agent_label || r.agent} · tool: <code>{r.tool}</code></span>
+                      </div>
+                      {r.plain_summary && (
+                        <p style={{ margin: "6px 0 4px", fontSize: 13.5, lineHeight: 1.5 }}>{r.plain_summary}</p>
+                      )}
+                      {r.key_facts?.length > 0 && (
+                        <ul style={{ margin: "6px 0 0 18px", padding: 0, fontSize: 13, lineHeight: 1.55, color: "#2c3e50" }}>
+                          {r.key_facts.map((fact, idx) => (
+                            <li key={idx} style={{ marginBottom: 2 }}>{fact}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <details style={{ marginTop: 12, fontSize: 12.5 }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 600, color: "#4f6d7a" }}>
+                    Inspect raw tool JSON receipts & multi-agent execution trace ({answer.receipts.length} receipts)
+                  </summary>
+                  <pre
+                    style={{
+                      marginTop: 8,
+                      padding: 10,
+                      borderRadius: 6,
+                      background: "rgba(0,0,0,0.04)",
+                      overflowX: "auto",
+                      maxHeight: 280,
+                      fontSize: 11.5,
+                    }}
+                  >
+                    {JSON.stringify(
+                      {
+                        aws_dynamodb_table: answer.aws_trace_table || "wealthpilot-traces",
+                        aws_turn_id: answer.aws_trace_id || "local",
+                        verification_coverage: answer.report?.coverage,
+                        trace: answer.trace,
+                        receipts: answer.receipts.map(({ id, tool, agent, inputs, output, error }) => ({
+                          id, tool, agent, inputs, output, error,
+                        })),
+                      },
+                      null,
+                      2
+                    )}
+                  </pre>
+                </details>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </section>
   );

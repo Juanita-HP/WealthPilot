@@ -4,6 +4,7 @@ import { api, dollars, pct, go } from "../lib.js";
 export default function Profile({ username, onChanged, onSignOut, onDeleted }) {
   const [p, setP] = useState(null);
   const [error, setError] = useState("");
+  const [switching, setSwitching] = useState("");
 
   const load = () => api("/profile").then(setP).catch(e => setError(e.message));
   useEffect(() => { load(); }, []);
@@ -12,6 +13,19 @@ export default function Profile({ username, onChanged, onSignOut, onDeleted }) {
     await api("/profile/level", { method: "PUT", body: { level } });
     await load();
     onChanged();
+  };
+  const switchPersona = async persona => {
+    setSwitching(persona);
+    setError("");
+    try {
+      await api("/profile/persona/" + persona, { method: "POST" });
+      await load();
+      onChanged();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSwitching("");
+    }
   };
   const remove = async () => {
     if (!window.confirm("Delete your investor profile? You will answer the questionnaire again.")) return;
@@ -25,7 +39,7 @@ export default function Profile({ username, onChanged, onSignOut, onDeleted }) {
   return (
     <section className="page">
       <div className="page-heading">
-        <div className="eyebrow">INVESTOR PROFILE · {username}</div>
+        <div className="eyebrow">INVESTOR PROFILE · {p.persona ? `${p.persona} (Demo Persona)` : username}</div>
         <h1>{pr.name} · {pr.score_10}/10 risk</h1>
         <p>Recommended level. Suits {pr.suits}.</p>
       </div>
@@ -54,6 +68,32 @@ export default function Profile({ username, onChanged, onSignOut, onDeleted }) {
           <div className="inner"><ul>{pr.capacity_reasons.map(r => <li key={r.label}>{r.label}: {r.points.toFixed(1)} points</li>)}</ul>
             <p className="muted">Savings rate {pct(f.savings_rate)} · debt to income {pct(f.debt_to_income)}.</p></div>
         </details>
+      </div>
+
+      <div className="analysis-card" style={{ marginTop: 18 }}>
+        <div className="eyebrow">DEMO PERSONAS · 1-CLICK SWITCH</div>
+        <h2>Switch to a benchmark persona</h2>
+        <p className="analysis-status" style={{ marginTop: 0 }}>
+          Instantly load Amira, Mateo, or Robert to compare how WealthPilot adapts the goals, portfolio, and Devil's Advocate checks.
+        </p>
+        <div className="choices three">
+          {[
+            ["Amira", "26 yrs · Growth (8/10 risk) · Long-term growth (20 yrs) · Tech & crypto"],
+            ["Mateo", "41 yrs · Balanced (6/10 risk) · Education & Retirement · Strict ESG"],
+            ["Robert", "59 yrs · Moderate goal cap (4/10 risk) · Retirement in 4 yrs"],
+          ].map(([name, desc]) => (
+            <button
+              key={name}
+              type="button"
+              className={"choice" + (p.persona === name ? " selected" : "")}
+              disabled={Boolean(switching)}
+              onClick={() => switchPersona(name)}
+            >
+              <strong>{switching === name ? `Loading ${name}…` : p.persona === name ? `${name} (Active)` : `Load ${name}`}</strong>
+              <small>{desc}</small>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="btn-row">

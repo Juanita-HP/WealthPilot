@@ -420,4 +420,4 @@ def train(prices: pd.DataFrame | None = None) -> dict:
 
 def load_artifact(path: Path | None = None) -> dict | None:
     path = path or ARTIFACT
-    return json.loads(path.read_text()) if path.exists() else None
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None

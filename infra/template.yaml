@@ -2,17 +2,17 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   WealthPilot - explainable investment simulation (PolyFinances datathon).
-  Claude on Amazon Bedrock (bedrock-mantle), agents and tools in Lambda,
-  data in S3, session state and audit trail in DynamoDB. No public endpoint:
-  the UI invokes the function with IAM credentials.
+  Amazon Bedrock Converse API (Claude Haiku 4.5 + Nova 2 Lite fallback),
+  agents and tools in Lambda, data in S3, session state and audit trail in
+  DynamoDB. No public endpoint: the UI invokes the function with IAM credentials.
 
 Parameters:
   ModelId:
     Type: String
-    Default: anthropic.claude-opus-5-5
+    Default: global.anthropic.claude-haiku-4-5-20251001-v1:0
   FallbackModelId:
     Type: String
-    Default: anthropic.claude-opus-4-8
+    Default: global.amazon.nova-2-lite-v1:0
   DataPrefix:
     Type: String
     Default: wealthpilot
@@ -58,13 +58,16 @@ Resources:
           TRACE_TABLE: !Ref TraceTable
           WEALTHPILOT_LLM: bedrock
           WEALTHPILOT_MODEL: !Ref ModelId
+          WEALTHPILOT_FALLBACK_MODEL: !Ref FallbackModelId
       Policies:
         - S3ReadPolicy: {BucketName: !Ref DataBucket}
         - DynamoDBCrudPolicy: {TableName: !Ref TraceTable}
         - Statement:
             - Effect: Allow
-              Action: bedrock-mantle:CreateInference   # Claude in Amazon Bedrock (Messages API)
-              Resource: "*"   # restrict to the two model ARNs once enabled in the account
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource: "*"
     Metadata:
       DockerContext: ..
       Dockerfile: infra/Dockerfile

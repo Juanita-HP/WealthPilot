@@ -7,6 +7,7 @@ result is stored in the ledger with an id it must cite.
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Callable
@@ -19,6 +20,18 @@ from .. import profile as pf
 from .ledger import Ledger, jsonable
 
 MAX_TOOL_RESULT_CHARS = 12_000
+_TOOL_NEWS_CACHE: dict[tuple, tuple[float, object]] = {}
+_TOOL_NEWS_TTL = 1800.0
+
+
+def _cached(key: tuple, fn):
+    now = time.time()
+    hit = _TOOL_NEWS_CACHE.get(key)
+    if hit and now - hit[0] < _TOOL_NEWS_TTL:
+        return hit[1]
+    val = fn()
+    _TOOL_NEWS_CACHE[key] = (now, val)
+    return val
 
 
 @dataclass
@@ -149,16 +162,20 @@ def t_ticker(s: Session, symbol: str):
     return o
 
 
+def _headlines(symbol: str) -> list[dict]:
+    return _cached(("headlines", symbol.upper()), lambda: news.recent_headlines(symbol.upper()))
+
+
 def _digest(symbol: str) -> dict | None:
     try:
-        return news.digest(symbol, news.recent_headlines(symbol)).to_dict()
+        return _cached(("digest", symbol.upper()), lambda: news.digest(symbol.upper(), _headlines(symbol)).to_dict())
     except Exception:  # news are optional evidence; their absence is reported by the digest tool itself
         return None
 
 
 def _macro_items() -> list[dict]:
     try:
-        return macro_news.recent()
+        return _cached(("macro",), macro_news.recent)
     except Exception:  # official news are optional evidence
         return []
 
@@ -184,7 +201,7 @@ def t_macro_news(s: Session, weights: list[dict]):
 
 
 def t_news(s: Session, symbol: str):
-    d = news.digest(symbol.upper(), news.recent_headlines(symbol.upper()))
+    d = news.digest(symbol.upper(), _headlines(symbol))
     return {**d.to_dict(), "trust_tiers": news.TRUST_TIERS,
             "use": "Context and justification only; news are not used to predict prices."}
 

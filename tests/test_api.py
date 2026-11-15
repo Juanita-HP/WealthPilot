@@ -118,3 +118,61 @@ def test_plan_includes_the_inflation_forecast_card(client):
     ml = card["ml"]
     assert len(ml["top"]) == 3 and abs(ml["top"][0]["contribution"]) >= abs(ml["top"][2]["contribution"])
     assert ml["low"] < ml["forecast"] < ml["high"] and ml["mae"] > 0
+
+
+@requires_starter
+def test_one_click_demo_personas_and_enriched_receipts(client, monkeypatch):
+    from wealthpilot import api, ticker
+    from wealthpilot.agents import llm as llm_mod
+    from wealthpilot.agents.llm import ScriptedLLM
+
+    monkeypatch.setattr(ticker, "auto_source", lambda: ticker.StarterSource())
+
+    # 1-click demo login for Amira
+    r = client.post("/api/auth/demo/Amira")
+    assert r.status_code == 200 and r.json()["persona"] == "Amira"
+    h = {"Authorization": "Bearer " + r.json()["token"]}
+    assert client.get("/api/me", headers=h).json()["has_profile"] is True
+    prof_amira = client.get("/api/profile", headers=h).json()
+    assert prof_amira["profile"]["name"] == "Growth" and prof_amira["persona"] == "Amira"
+    fit_amira = client.get("/api/stocks/TSLA/insights", headers=h).json()["fit"]["score"]
+    assert client.post("/api/auth/demo/UnknownPersona").status_code == 404
+
+    # 1-click persona switch to Robert must invalidate INSIGHT_CACHE and update persona
+    sw = client.post("/api/profile/persona/robert", headers=h)
+    assert sw.status_code == 200 and sw.json()["persona"] == "Robert"
+    prof_robert = client.get("/api/profile", headers=h).json()
+    assert prof_robert["financials"]["age"] == 59 and prof_robert["persona"] == "Robert"
+    fit_robert = client.get("/api/stocks/TSLA/insights", headers=h).json()["fit"]["score"]
+    assert fit_robert != fit_amira
+
+    # Ask endpoint with enriched R1 investor_context (age, financials, goal horizons, S&P 500 index skip)
+    monkeypatch.setenv("WEALTHPILOT_LLM", "scripted")
+    monkeypatch.delenv("TRACE_TABLE", raising=False)
+    monkeypatch.delenv("WEALTHPILOT_TRACE_TABLE", raising=False)
+    scripted = ScriptedLLM([
+        "At age 59 with $140,000 income [R1], your Retirement in 4 years goal has a $600,000 target and holds S&P 500 and S&P/TSX 60 index funds [R1].",
+        "No major objection for a 4-year horizon [R1].",
+    ])
+    monkeypatch.setattr(llm_mod, "from_env", lambda: scripted)
+    ans = client.post("/api/ask", json={"question": "What is my retirement horizon?"}, headers=h).json()
+    assert ans["report"]["passed"] is True
+    r1 = ans["receipts"][0]
+    assert r1["id"] == "R1" and r1["tool"] == "investor_context"
+    assert r1["output"]["age"] == 59 and r1["output"]["financials"]["annual_income"] == 140_000
+    assert len(r1["output"]["goals"]) == 2 and len(r1["output"]["current_portfolio_holdings"]) >= 1
+    assert r1["plain_title"] and r1["plain_summary"] and len(r1["key_facts"]) >= 2
+
+    # Check _summarize_receipt covers stress_test, strategy_lab, compare_allocations, plan_goals
+    s_stress = api._summarize_receipt({
+        "id": "R2", "tool": "stress_test", "agent": "advisor", "inputs": {},
+        "output": {"scenarios": [{"label": "2008 Crash", "portfolio_return": -0.22, "dollars": -112200}]},
+    })
+    assert "Stress Tests" in s_stress["plain_title"] and len(s_stress["key_facts"]) == 1
+    s_lab = api._summarize_receipt({
+        "id": "R3", "tool": "strategy_lab", "agent": "advisor", "inputs": {"symbol": "SPY", "strategy": "rsi"},
+        "output": {"result": {"symbol": "SPY", "strategy": "rsi", "out_of_sample": {"total_return": 0.12, "sharpe": 0.5},
+                              "buy_hold_out_of_sample": {"total_return": 0.25, "sharpe": 0.9}}},
+    })
+    assert "Strategy Lab" in s_lab["plain_title"] and len(s_lab["key_facts"]) == 2
+

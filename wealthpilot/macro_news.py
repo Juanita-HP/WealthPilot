@@ -292,7 +292,7 @@ class LLMTextAnalyzer:
         from .news import PROMPTS_DIR
         self.llm = llm
         self.name = f"claude-macro-{version}"
-        self.system = (PROMPTS_DIR / f"macro_{version}.md").read_text()
+        self.system = (PROMPTS_DIR / f"macro_{version}.md").read_text(encoding="utf-8")
 
     def analyze(self, text: str, title: str = "") -> TextAnalysis:
         base = analyze_text(text, title)
@@ -366,7 +366,11 @@ def recent(max_age_hours: float = 12.0, **kw) -> list[dict]:
     """Collected items from the local cache if fresh enough, otherwise collected again."""
     path = MACRO_DIR / "items.jsonl"
     if path.exists():
-        rows = [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            raw = path.read_text(encoding="cp1252", errors="replace")
+        rows = [json.loads(x) for x in raw.splitlines() if x.strip()]
         version = kw["analyzer"].name if kw.get("analyzer") is not None else ANALYZER_VERSION
         fresh = bool(rows) and datetime.fromisoformat(rows[0]["retrieved_at"]) > datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
         # Analyse again when the rules or the stored fields changed.
@@ -375,7 +379,7 @@ def recent(max_age_hours: float = 12.0, **kw) -> list[dict]:
     rows = [i.to_dict() for i in collect(**kw)]
     if rows:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
+        path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
     return rows
 
 

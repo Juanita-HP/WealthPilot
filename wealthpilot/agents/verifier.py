@@ -79,6 +79,11 @@ def _parse(num: str) -> tuple[float, int]:
 def _skip(value: float, unit: str, sentence: str, start: int) -> bool:
     if unit:
         return False
+    if start > 0 and sentence[start - 1] == "/" and value in {5, 10, 20, 100}:  # scale denominators (e.g. 63/100)
+        return True
+    prefix = sentence[max(0, start - 12):start].upper()
+    if value in {60, 100, 500, 2000} and any( prefix.endswith(p) for p in ("S&P ", "TSX ", "NASDAQ-", "NASDAQ ", "RUSSELL ") ):
+        return True
     if value.is_integer() and 1900 <= value <= 2100:   # years
         return True
     return value.is_integer() and value <= 12            # counts, list markers, months, levels
