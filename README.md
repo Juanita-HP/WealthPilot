@@ -98,6 +98,8 @@ Amazon SageMaker training jobs (`bash scripts/train_aws.sh`); a new model reache
 | `wealthpilot/onboarding.py`, `wealthpilot/accounts.py` | Numeric onboarding: capacity from emergency months, share of assets invested, debt to income, savings rate, employment and dependents; flags (cushion short, savings over-committed, high debt); demo accounts |
 | `wealthpilot/agents/` | Advisor and devil's advocate agents (Claude on Amazon Bedrock), tools with receipts, deterministic verifier |
 | `wealthpilot/api.py`, `web/` | HTTP API (FastAPI) and React interface; every text the API returns is plain English, ready to display |
+| `wealthpilot/coverage.py` | Which investments the devil's advocate can review (stated data rules: type, CAD/USD, 3+ years of prices, volume, known sector or fund type inferred from prices), live data for assets outside the stored universe, liquidity measure |
+| `wealthpilot/markets.py` | Search page overview: popular investments and today's biggest moves (our stated rule), with daily charts |
 | `wealthpilot/aws/`, `infra/` | Lambda handlers (agents, hosted API), S3 data sync, DynamoDB audit trail, SAM templates (see `docs/aws.md`) |
 
 Architecture, agents, validation and limits: [`docs/architecture.md`](docs/architecture.md).

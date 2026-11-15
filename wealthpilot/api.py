@@ -22,6 +22,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from functools import lru_cache
 from pathlib import Path
@@ -31,10 +32,10 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from . import accounts, advocate, data, forecast as fc, goals as gl, inflation as infl, lab, macro_news, news
+from . import accounts, advocate, coverage as cov, data, forecast as fc, goals as gl, inflation as infl, lab, macro_news, news
 from . import onboarding as ob
 from . import profile as pf
-from . import risks, strategist, ticker as tk, time_machine as tm, whatif
+from . import markets as mk, risks, strategist, ticker as tk, time_machine as tm, whatif
 from .agents.ledger import jsonable
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -52,12 +53,14 @@ app = FastAPI(title="WealthPilot API", version="1.0",
 def market() -> dict:
     px_cad = data.load_prices_cad()
     px_local = data.load_prices()
-    vol = risks.average_dollar_volume(data.load_prices("close"), data.load_prices("volume"))
+    close, volume = data.load_prices("close"), data.load_prices("volume")
+    vol = risks.average_dollar_volume(close, volume)
     try:
         cpi = data.load_macro_history("V41690973", point_in_time=False)
     except FileNotFoundError:
         cpi = None
-    return {"px_cad": px_cad, "px_local": px_local, "universe": data.load_universe(), "dollar_vol": vol, "cpi": cpi}
+    return {"px_cad": px_cad, "px_local": px_local, "universe": data.load_universe(), "dollar_vol": vol, "cpi": cpi,
+            "close": close, "volume": volume, "fx": data.load_fx()}
 
 
 class TTLCache:
@@ -274,7 +277,9 @@ CHALLENGE_TITLE = {"SINGLE_SECURITY": "Too large for a single stock", "EQUITY_AB
                    "ESG_CONTROVERSY": "ESG or controversy signal in recent news",
                    "ALREADY_OWNED": "You already own it through your index funds",
                    "GOLD_ABOVE_LIMIT": "Too much gold",
-                   "EQUITY_BELOW_RANGE": "Few stocks for your level"}
+                   "EQUITY_BELOW_RANGE": "Few stocks for your level",
+                   "LIQUIDITY": "Could be hard to sell quickly at a fair price",
+                   "LEVERAGED_FUND": "Leveraged or inverse fund"}
 VERDICT = {"reconsider": ("red", "Reconsider"), "proceed with care": ("yellow", "Proceed with care"),
            "no major objection": ("green", "No major objection")}
 STRATEGY_LABEL = {"ma_crossover": "Moving-average crossover", "rsi": "RSI (buy the dips)", "bollinger": "Bollinger bands",
@@ -678,6 +683,15 @@ def yahoo(host: str, path: str, request: Request):
     return Response(body, status_code=status, media_type="application/json")
 
 
+MARKETS_CACHE = TTLCache(300)
+
+
+@app.get("/api/markets/overview")
+def markets_overview():
+    """Popular investments and today's biggest moves, each with its latest trading day's chart (5 minutes cached)."""
+    return MARKETS_CACHE.get("overview", mk.overview)
+
+
 # ----------------------------------------------------------------------------- time machine, advocate, lab
 
 
@@ -699,7 +713,40 @@ def time_machine(user: str = Depends(current_user)):
                    f"{money(d['trough_value'])}, {money(d['dollars_lost'])} less than at the previous peak.",
         "shocks": [{"label": s["label"], "return": s["portfolio_return"], "dollars": s["dollars"], "basis": s["basis"]}
                    for s in shocks],
+        "vs_inflation": holdings_vs_inflation(st["weights"], m, r),
     })
+
+
+def holdings_vs_inflation(weights: dict[str, float], m: dict, r) -> dict | None:
+    """Each holding of the plan and the plan itself, as growth of 100, next to the cost of living (CPI)."""
+    if m["cpi"] is None:
+        return None
+    idx = r.path.index
+    cpi = tm.deflator(m["cpi"], idx)
+    weekly = lambda s: s.resample("W-FRI").last().dropna()  # noqa: E731
+    years = (idx[-1] - idx[0]).days / 365.25
+    infl_total = float(cpi.iloc[-1] - 1)
+    infl_annual = (1 + infl_total) ** (1 / years) - 1
+
+    def row(label, ticker, weight, s):
+        s = s.dropna()
+        total = float(s.iloc[-1] / s.iloc[0] - 1)
+        annual = (1 + total) ** (1 / years) - 1
+        real = (1 + annual) / (1 + infl_annual) - 1
+        return {"ticker": ticker, "name": label, "weight": weight, "total_return": total, "annual_return": annual,
+                "real_annual_return": real, "beats_inflation": real > 0,
+                "growth": (weekly(s / s.iloc[0]) * 100).round(2).tolist()}
+    u = m["universe"]
+    holdings = [row(u.loc[t, "name"], t, w, m["px_cad"][t].reindex(idx).ffill())
+                for t, w in sorted(weights.items(), key=lambda kv: -kv[1]) if w > 0.001 and t in m["px_cad"]]
+    plan = row("Your plan (all holdings, rebalanced quarterly, after costs)", None, 1.0, r.path["value"])
+    return {"start": str(idx[0].date()), "end": str(idx[-1].date()),
+            "dates": [str(x.date()) for x in weekly(r.path["value"]).index],
+            "inflation": {"total": infl_total, "annual": infl_annual, "growth": (weekly(cpi) * 100).round(2).tolist(),
+                          "source": "Statistics Canada, consumer price index (all items)"},
+            "plan": plan, "holdings": holdings,
+            "note": "In Canadian dollars, dividends reinvested. Real return = return above the rise in the cost of "
+                    "living. Past results do not predict future returns."}
 
 
 class TradeRequest(BaseModel):
@@ -713,18 +760,112 @@ def universe():
     return [{"ticker": t, "name": u.loc[t, "name"], "asset_class": u.loc[t, "asset_class"]} for t in sorted(u.index)]
 
 
+# Assets outside the stored universe: checked once (cov.evaluate), kept for a few hours. Errors are not cached.
+LIVE_CACHE = TTLCache(6 * 3600)
+SEARCH_CACHE = TTLCache(600)
+
+
+def _search(q: str) -> list[dict]:
+    return SEARCH_CACHE.get(q.strip().lower(), lambda: cov.search_quotes(cov.fetch_search(q)))
+
+
+def live_asset(symbol: str, info: dict | None = None) -> cov.Asset:
+    """Coverage verdict for a symbol outside the universe (raises on network errors, which are not cached)."""
+    def load():
+        m = market()
+        meta, frame = cov.parse_chart(cov.fetch_chart(symbol))
+        found = info or next((x for x in _search(symbol) if x["symbol"] == symbol), {})
+        return cov.evaluate(symbol, meta, frame, found, m["px_cad"], m["fx"])
+    return LIVE_CACHE.get(("live", symbol), load)
+
+
+def _stored_item(t: str, u: pd.DataFrame) -> dict:
+    return {"symbol": t, "name": u.loc[t, "name"], "type": cov.TYPE_LABEL.get(u.loc[t, "asset_class"], "Other"),
+            "exchange": u.loc[t, "market"], "source": "stored"}
+
+
+@app.get("/api/advocate/search")
+def advocate_search(q: str = "", user: str = Depends(current_user)):
+    """Investments the devil's advocate can review: the stored universe, plus live matches that pass cov.evaluate.
+
+    Matches that fail the rules are not listed; only their number is returned, so the page can say so.
+    """
+    u = market()["universe"]
+    text = q.strip()
+    up, low = text.upper(), text.lower()
+    stored = [t for t in sorted(u.index) if not text or up in t or low in str(u.loc[t, "name"]).lower()]
+    stored.sort(key=lambda t: (t != up, not t.startswith(up)))
+    results = [_stored_item(t, u) for t in stored]
+    hidden, note = 0, None
+    if text:
+        try:
+            quotes = _search(text)
+        except Exception:
+            quotes, note = [], "Live search is unavailable right now: only the stored assets are listed."
+        candidates = [x for x in quotes if x["symbol"] not in u.index][:8]
+        hidden += sum(1 for x in candidates if x["kind"] == "currency")
+        candidates = [x for x in candidates if x["kind"] != "currency"]
+
+        def check(x):
+            try:
+                return live_asset(x["symbol"], x)
+            except Exception:
+                return None
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            checked = list(ex.map(check, candidates))
+        for x, a in zip(candidates, checked):
+            if a is not None and a.covered:
+                results.append({"symbol": a.symbol, "name": a.name, "type": cov.TYPE_LABEL.get(a.asset_class, "Other"),
+                                "exchange": a.exchange, "source": "live"})
+            else:
+                hidden += 1
+    return {"results": results[:12], "hidden": hidden, "note": note,
+            "rules": "Listed only when there is enough data for a reviewed answer: stocks, ETFs or crypto in CAD or "
+                     f"USD, at least {cov.MIN_YEARS:g} years of daily prices, traded volume, and a known sector "
+                     "(stocks) or a clear match with a stock, bond or gold fund (ETFs)."}
+
+
+def advocate_inputs(sym: str) -> dict:
+    """Prices, universe, liquidity and flags for one asset, stored or live. 422 if it cannot be reviewed."""
+    m = market()
+    u = m["universe"]
+    if sym in u.index:
+        liq = None
+        if sym in m["volume"]:
+            liq = cov.liquidity(m["close"][sym], m["volume"][sym], cov.to_cad_rate(u.loc[sym, "currency"], m["fx"]))
+        return {"prices": m["px_cad"], "universe": u, "liquidity": liq, "leveraged": False, "source": "stored"}
+    try:
+        a = live_asset(sym)
+    except Exception:
+        raise HTTPException(503, f"Data for {sym} could not be loaded right now. Try again in a moment.")
+    if not a.covered:
+        raise HTTPException(422, f"{sym} cannot be reviewed: {a.reason}")
+    row = pd.DataFrame([a.universe_row()], index=pd.Index([sym], name=u.index.name))
+    return {"prices": cov.merge_prices(m["px_cad"], sym, a.checks["adj_cad"]), "universe": pd.concat([u, row]),
+            "liquidity": cov.liquidity(a.close, a.volume, cov.to_cad_rate(a.currency, m["fx"])),
+            "leveraged": a.leveraged, "source": "live", "behaves_like": a.behaves_like}
+
+
 @app.post("/api/advocate")
 def devils_advocate(req: TradeRequest, user: str = Depends(current_user)):
-    st, m = user_state(user), market()
-    sym = req.symbol.upper()
-    if sym not in m["universe"].index:
-        raise HTTPException(404, f"{sym} is not in the simulation universe.")
+    st = user_state(user)
+    sym = req.symbol.strip().upper()
+    a = advocate_inputs(sym)
     hs = headlines(sym)
     dg = news.digest(sym, hs).to_dict() if hs else None
-    rv = advocate.review_trade(sym, max(0.01, min(req.weight, 0.9)), st["weights"], st["effective"], m["px_cad"],
-                               m["universe"], news_digest=dg, macro_items=macro_items())
+    rv = advocate.review_trade(sym, max(0.01, min(req.weight, 0.9)), st["weights"], st["effective"], a["prices"],
+                               a["universe"], news_digest=dg, macro_items=macro_items(), liquidity=a["liquidity"],
+                               amount=st["plan"].total_amount, leveraged=a["leveraged"])
     tone, title = VERDICT[rv.verdict]
+    row = a["universe"].loc[sym]
+    basis = (f"Stored dataset ({a['prices'].index[0].date()} to {a['prices'].index[-1].date()})" if a["source"] == "stored"
+             else f"Yahoo Finance daily prices, aligned to the stored dataset's calendar")
+    if a.get("behaves_like"):
+        b = a["behaves_like"]
+        basis += f". Fund type inferred from its prices: moves like {b['label']} ({b['reference']}, correlation {b['correlation']:.2f})"
     return jsonable({"verdict": {"tone": tone, "text": title},
+                     "asset": {"symbol": sym, "name": row["name"], "type": cov.TYPE_LABEL.get(row["asset_class"], "Other"),
+                               "source": a["source"], "basis": basis, "liquidity": a["liquidity"]},
                      "challenges": [{"code": c.code, "title": CHALLENGE_TITLE.get(c.code, c.bias), "severity": c.severity,
                                      "claim": c.claim, "counterpoint": c.counterpoint, "question": c.question}
                                     for c in rv.challenges],

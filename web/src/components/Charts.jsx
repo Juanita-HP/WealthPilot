@@ -67,3 +67,32 @@ export function ValueChart({ dates, value, valueReal, from, to }) {
   }, [dates, value, valueReal, from, to]);
   return <canvas ref={canvas} />;
 }
+
+// Growth of 100 for several series (time machine: the plan, its holdings and the cost of living).
+export function GrowthChart({ dates, series }) {
+  const canvas = useRef(null);
+  useEffect(() => {
+    const chart = new Chart(canvas.current, {
+      type: "line",
+      data: {
+        labels: dates,
+        datasets: series.map(s => ({ label: s.label, data: s.values, borderColor: s.color, borderWidth: s.width || 1.4,
+                                     borderDash: s.dash || [], pointRadius: 0, tension: .1, order: s.order ?? 1 })),
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { position: "bottom", labels: { boxWidth: 12, color: "#83898b" } },
+          tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${c.parsed.y.toFixed(0)}` } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 6, maxRotation: 0, color: "#8b9294" } },
+          y: { position: "right", grid: { color: "#eae8e3" }, ticks: { maxTicksLimit: 6, color: "#8b9294" } },
+        },
+      },
+    });
+    return () => chart.destroy();
+  }, [dates, series]);
+  return <canvas ref={canvas} />;
+}
