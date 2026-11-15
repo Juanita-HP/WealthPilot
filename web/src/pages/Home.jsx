@@ -124,7 +124,7 @@ export default function Home() {
       <div id="searchStatus" className={status.error ? "error" : ""}>{status.text}</div>
       {p && (
         <button className="profile-pill" onClick={() => go("profile")}>
-          {p.name} profile · {p.score_10}/10 · Click to view or edit your answers
+          {p.name} profile · {p.score_10}/10 risk · Click to view or edit your answers
         </button>
       )}
     </section>
