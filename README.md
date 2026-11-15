@@ -72,7 +72,7 @@ Create a (fictional) account, then answer the questionnaire, one question per pa
 
 The website runs on AWS: CloudFront serves the React build from S3 and sends `/api/*` to the FastAPI app on Lambda
 (accounts in DynamoDB, agents on Amazon Bedrock). Deploy or update it from AWS CloudShell with
-`bash scripts/deploy_aws.sh`; no access keys are needed (see `docs/aws.md`). The models are retrained monthly in
+`bash scripts/deploy_aws.sh`; no access keys are needed (see `infra/aws.md`). The models are retrained monthly in
 Amazon SageMaker training jobs (`bash scripts/train_aws.sh`); a new model reaches the site only after
 `scripts/promote_models.sh` and a confirmation.
 
@@ -88,11 +88,11 @@ Amazon SageMaker training jobs (`bash scripts/train_aws.sh`); a new model reache
 | `wealthpilot/profile.py` | 10-question questionnaire scored on risk capacity and risk tolerance, risk level (lower of the two, capped by short horizons), constraints per level, goal analysis, allocation checker |
 | `wealthpilot/ticker.py` | Ticker dashboard backend: overview with provenance for every number, chart series per timeframe, growth score (from financial statements) and profile-fit score, each with its factor breakdown. Sources: `YFinanceSource` (live, cached) or `StarterSource` (offline) |
 | `wealthpilot/strategist.py`, `time_machine.py`, `validation.py` | Policy allocation with a reason per weight; replay in the investor's dollars and hypothetical shocks; out-of-sample validation |
-| `wealthpilot/inflation.py` | Canadian CPI forecaster validated walk-forward (see `docs/model_card_inflation.md`) |
+| `wealthpilot/inflation.py` | Canadian CPI forecaster validated walk-forward (see `models/model_card_inflation.md`) |
 | `wealthpilot/timing.py` | The backtesting engine's ML timing model (logistic regression on its technical indicators and the VIX; features checked against the engine by `tests/test_timing_parity.py`), tested year by year with realistic broker costs and a threshold chosen on training data only; answers "invest now, spread it out, or wait?" in My plan and the agents' `invest_now_or_wait` tool |
 | `wealthpilot/lab.py` | Strategy lab adapted from nicho-spekt/backtesting-engine, always against buy-and-hold and out of sample |
 | `wealthpilot/advocate.py` | Devil's advocate: evidence-based challenges with honest counterpoints |
-| `wealthpilot/macro_news.py`, `wealthpilot/webtext.py` | Global news read in full from official sources (Bank of Canada, Federal Reserve, Statistics Canada) with BeautifulSoup where robots.txt allows AI agents: decision and quotes, risk factors, share of the investor's portfolio exposed, past similar events, matching stress test; checked against official series (`scripts/eval_macro.py`, `docs/macro_eval.md`) |
+| `wealthpilot/macro_news.py`, `wealthpilot/webtext.py` | Global news read in full from official sources (Bank of Canada, Federal Reserve, Statistics Canada) with BeautifulSoup where robots.txt allows AI agents: decision and quotes, risk factors, share of the investor's portfolio exposed, past similar events, matching stress test; checked against official series (`scripts/eval_macro.py`, `models/macro_eval.md`) |
 | `wealthpilot/news.py`, `wealthpilot/news_prompts/` | News as data: source trust tiers, descriptive vs predictive classification (rule baseline and versioned Claude prompts scored on a golden set, `scripts/eval_news.py`), relevance filter, hype share used by the devil's advocate |
 | `wealthpilot/goals.py`, `risks.py`, `whatif.py` | One sub-portfolio per goal with its own horizon; six kinds of risk; what would change the answer |
 | `wealthpilot/onboarding.py`, `wealthpilot/accounts.py` | Numeric onboarding: capacity from emergency months, share of assets invested, debt to income, savings rate, employment and dependents; flags (cushion short, savings over-committed, high debt); demo accounts |
@@ -100,9 +100,9 @@ Amazon SageMaker training jobs (`bash scripts/train_aws.sh`); a new model reache
 | `wealthpilot/api.py`, `web/` | HTTP API (FastAPI) and React interface; every text the API returns is plain English, ready to display |
 | `wealthpilot/coverage.py` | Which investments the devil's advocate can review (stated data rules: type, CAD/USD, 3+ years of prices, volume, known sector or fund type inferred from prices), live data for assets outside the stored universe, liquidity measure |
 | `wealthpilot/markets.py` | Search page overview: popular investments and today's biggest moves (our stated rule), with daily charts |
-| `wealthpilot/aws/`, `infra/` | Lambda handlers (agents, hosted API), S3 data sync, DynamoDB audit trail, SAM templates (see `docs/aws.md`) |
+| `wealthpilot/aws/`, `infra/` | Lambda handlers (agents, hosted API), S3 data sync, DynamoDB audit trail, SAM templates (see `infra/aws.md`) |
 
-Architecture, agents, validation and limits: [`docs/architecture.md`](docs/architecture.md).
+Architecture, agents, validation and limits: [`infra/architecture.md`](infra/architecture.md).
 
 To cross-check the NumPy metrics against the original C++ engine, build `metrics_cpp` for your platform and run `METRICS_CPP_PATH=<build dir> pytest`.
 
