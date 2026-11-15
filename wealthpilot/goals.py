@@ -148,7 +148,8 @@ def plan_goal(profile: pf.InvestorProfile, g: GoalSpec, prices: pd.DataFrame | N
     goal_profile = profile if level == profile.level else pf.with_level(profile, level, why)
     al = policy_allocation(goal_profile, prices)
     notes = list(al.notes)
-    expected = pf.expected_return(level, goal_profile.constraints.home_equity_share, al.equity_share)
+    expected = pf.expected_return(level, goal_profile.constraints.home_equity_share, al.equity_share,
+                                  split=al.equity_split or goal_profile.constraints.equity_split)
     if g.type == "income":
         notes.append("Income goal: dividends and bond interest matter more than growth; check yields in the "
                      "ticker dashboard.")

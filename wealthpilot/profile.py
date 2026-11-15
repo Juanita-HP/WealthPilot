@@ -142,7 +142,13 @@ class Preferences:
     values: tuple[str, ...] = ()           # non-financial values, e.g. ("no_fossil_fuels",)
 
 
-REGION_HOME_SHARE = {"canada": 0.60, "balanced": 0.40, "us": 0.20, "global": 0.30}
+# How the stock share is split by region: (Canada, U.S., international developed, emerging markets).
+# Canada is about 3% of world stock markets, the U.S. about 60%, other developed markets about 25%, emerging
+# markets about 10%. Every split keeps some home bias (currency of spending, taxes, familiarity) and some of the
+# world outside North America; "global" is the closest to world weights. Design choice, stated as such.
+REGION_SPLIT = {"canada": (0.60, 0.30, 0.10, 0.00), "balanced": (0.40, 0.45, 0.15, 0.00),
+                "us": (0.20, 0.70, 0.10, 0.00), "global": (0.25, 0.45, 0.20, 0.10)}
+REGION_HOME_SHARE = {k: v[0] for k, v in REGION_SPLIT.items()}
 
 
 @dataclass(frozen=True)
@@ -257,11 +263,14 @@ def equity_position(profile: "InvestorProfile") -> tuple[float, str]:
                  f"{lv.equity_min:.0%}-{lv.equity_max:.0%} range")
 
 
-def expected_return(level: int, home_share: float, equity: float | None = None) -> dict:
+def expected_return(level: int, home_share: float, equity: float | None = None,
+                    split: tuple[float, float, float, float] | None = None) -> dict:
     """Assumed long-term return of a stock share (default: the level's midpoint). Planning hypothesis."""
     lv = LEVELS[level]
     eq = (lv.equity_min + lv.equity_max) / 2 if equity is None else equity
-    mix = {"canadian_equity": eq * home_share, "us_equity": eq * (1 - home_share), "fixed_income": 1 - eq}
+    ca, us, intl, em = split if split else (home_share, 1 - home_share, 0.0, 0.0)
+    mix = {"canadian_equity": eq * ca, "us_equity": eq * us, "international_equity": eq * intl,
+           "emerging_equity": eq * em, "fixed_income": 1 - eq}
     gross, _ = assumptions.blended_return(mix)
     return {"equity_share": eq, "gross": gross, "fees": FEE_ASSUMPTION, "net": gross - FEE_ASSUMPTION,
             "source": assumptions.SOURCE["name"]}
@@ -277,6 +286,7 @@ class Constraints:
     home_equity_share: float
     worst_year_accepted: float
     limits: Limits
+    equity_split: tuple[float, float, float, float] = (0.40, 0.60, 0.0, 0.0)  # Canada, U.S., intl, emerging
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -369,7 +379,7 @@ def constraints_for(level: int, answers: dict[str, str], preferences: Preference
     return Constraints(
         equity_min=lv.equity_min, equity_max=lv.equity_max, max_crypto=max_crypto, max_gold=MAX_GOLD,
         excluded_sectors=tuple(sorted(set(preferences.excluded_sectors) | values_exclusions(preferences.values))),
-        home_equity_share=REGION_HOME_SHARE[preferences.region],
+        home_equity_share=REGION_HOME_SHARE[preferences.region], equity_split=REGION_SPLIT[preferences.region],
         worst_year_accepted=WORST_YEAR_ACCEPTED[answers["range_choice"]],
         limits=Limits(max_single_security=lv.max_single_security, max_sector=lv.max_sector, max_crypto=max_crypto),
     ), flags
@@ -382,7 +392,7 @@ def with_level(profile: "InvestorProfile", level: int, reason: str) -> "Investor
     from dataclasses import replace
     constraints, _ = constraints_for(level, profile.answers, profile.preferences)
     return replace(profile, level=level, level_name=LEVELS[level].name, constraints=constraints,
-                   expected=expected_return(level, constraints.home_equity_share),
+                   expected=expected_return(level, constraints.home_equity_share, split=constraints.equity_split),
                    flags=profile.flags + [Flag("LEVEL_LOWERED", "info", reason, {"from": profile.level, "to": level})])
 
 
@@ -445,7 +455,7 @@ def build_profile(answers: dict[str, str], preferences: Preferences = Preference
     lv = LEVELS[level]
     home = constraints.home_equity_share
 
-    expected = expected_return(level, home)
+    expected = expected_return(level, home, split=constraints.equity_split)
     expectation = QUESTION_BY_ID["return_expectation"].option(answers["return_expectation"]).score
     if expectation > expected["net"] + 0.02:
         flags.append(Flag("EXPECTATION_GAP", "warning",
@@ -458,7 +468,7 @@ def build_profile(answers: dict[str, str], preferences: Preferences = Preference
         need = required_return(goal)
         goal_analysis = {"required_return": need, "assumed_return": expected["net"], "reachable": need <= expected["net"]}
         if need > expected["net"]:
-            reachable_levels = [n for n in LEVELS if expected_return(n, home)["net"] >= need]
+            reachable_levels = [n for n in LEVELS if expected_return(n, home, split=constraints.equity_split)["net"] >= need]
             goal_analysis["monthly_contribution_needed"] = required_monthly_contribution(goal, expected["net"])
             goal_analysis["lowest_level_reaching_goal"] = reachable_levels[0] if reachable_levels else None
             flags.append(Flag("GOAL_NOT_REACHABLE", "warning",

@@ -29,3 +29,9 @@ sentences. It is checked against the official data series the same institutions 
 direction is acceleration versus the previous month, not the sign of the annual rate; the rules were written while
 reading recent releases, so later releases are the real test. Prompt `macro_v1.md` gives Claude the same task; quotes
 it returns are kept only if found verbatim in the text.
+
+## rules-v3 (baseline update)
+Added leadership cues to the management category ("reinstate", "ousted", "fired", "steps down", "departure",
+"successor", "leadership") after the NVDA headlines about Jensen Huang's exit were filed under "other". On golden_v0:
+category accuracy 34% to 36%, type accuracy unchanged (77%), importance error 1.02 to 1.05. Material categories feed
+the devil's advocate's recent-news warning, so missing a leadership change mattered more than the small error change.

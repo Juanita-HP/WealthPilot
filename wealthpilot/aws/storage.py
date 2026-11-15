@@ -23,6 +23,8 @@ DATA_FILES = {
     "starter/fx_usdcad_daily.csv", "starter/macro_rates.csv", "external/macro_history.csv",
     "models/inflation_model.json",
 }
+# International funds (scripts/fetch_international.py): synced when present, optional.
+OPTIONAL_FILES = {"external/assets_universe_extra.csv", "external/extra_prices.csv"}
 
 
 def sync_from_s3(s3, bucket: str, prefix: str, dest: Path) -> list[str]:
@@ -35,6 +37,16 @@ def sync_from_s3(s3, bucket: str, prefix: str, dest: Path) -> list[str]:
         target.parent.mkdir(parents=True, exist_ok=True)
         s3.download_file(bucket, f"{prefix.rstrip('/')}/{rel}", str(target))
         fetched.append(rel)
+    for rel in sorted(OPTIONAL_FILES):
+        target = dest / rel
+        if target.exists():
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            s3.download_file(bucket, f"{prefix.rstrip('/')}/{rel}", str(target))
+            fetched.append(rel)
+        except Exception:  # not uploaded: the plan falls back to Canada and the U.S. only, and says so
+            target.unlink(missing_ok=True)
     return fetched
 
 

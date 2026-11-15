@@ -76,11 +76,16 @@ def risk_map(weights: dict[str, float], universe: pd.DataFrame, prices_cad: pd.D
                           "Selling quickly at a fair price can be hard for thinly traded assets; crypto trades "
                           "every day but its price can gap." + (f" Thinly traded: {', '.join(thin)}." if thin else "")))
 
-    ccy = exposure(w.to_dict(), universe, "currency")
+    col = "currency_exposure" if "currency_exposure" in universe else "currency"
+    ccy = exposure(w.to_dict(), universe, col)
     foreign = float(ccy.drop("CAD", errors="ignore").sum())
+    usd = float(ccy.get("USD", 0.0))
+    other = foreign - usd
     items.append(RiskItem("currency", _level(foreign, *THRESHOLDS["currency_foreign_share"]), foreign,
-                          "share listed in a foreign currency",
-                          f"{foreign:.0%} is in USD: a stronger Canadian dollar lowers its value in CAD, a weaker one raises it."))
+                          "share exposed to foreign currencies",
+                          f"{foreign:.0%} is exposed to foreign currencies ({usd:.0%} U.S. dollar"
+                          + (f", {other:.0%} other currencies through international funds" if other > 0.001 else "")
+                          + "): a stronger Canadian dollar lowers its value in CAD, a weaker one raises it."))
 
     rd = risk_decomposition(w.to_dict(), cov) if len(w) > 1 else pd.DataFrame({"risk_share": [1.0]}, index=w.index)
     single = rd.loc[[t for t in rd.index if universe.loc[t, "asset_class"] in {"equity", "crypto"}]]

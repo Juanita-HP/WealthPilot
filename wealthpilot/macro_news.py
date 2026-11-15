@@ -388,7 +388,16 @@ def _channel(factor: str, region: str, row: pd.Series, ticker: str) -> tuple[str
     """(direct|indirect, reason in French) for one holding, or None if not exposed. Documented rules."""
     ac, cur, sector = row["asset_class"], row["currency"], str(row["sector"])
     ultra = "ultra short" in sector.lower()
-    local = (region == "CA" and cur == "CAD") or (region == "US" and cur == "USD")
+    world = "international" in sector.lower() or "emerging" in sector.lower()   # CAD-listed, foreign holdings
+    local = not world and ((region == "CA" and cur == "CAD") or (region == "US" and cur == "USD"))
+    if world:
+        if factor == "currency":
+            return "direct", "Holds foreign-currency stocks (unhedged): its value in CAD moves with exchange rates."
+        if factor in ("growth", "trade"):
+            return "indirect", "Companies outside North America, linked to it through trade and global growth."
+        if factor == "energy" and "emerging" in sector.lower():
+            return "indirect", "Several emerging economies depend on energy prices."
+        return None
     if factor == "rates":
         if ac == "etf_bond" and ultra:
             return "indirect", "Very short maturities: its yield follows the policy rate and its price barely moves."

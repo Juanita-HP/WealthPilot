@@ -1,0 +1,3 @@
+asset_id,ticker,name,asset_class,market,currency,sector,currency_exposure
+X01,XEF.TO,iShares Core MSCI EAFE IMI Index ETF,etf_equity,TSX,CAD,Broad market (international developed),Foreign (unhedged)
+X02,XEC.TO,iShares Core MSCI Emerging Markets IMI Index ETF,etf_equity,TSX,CAD,Broad market (emerging markets),Foreign (unhedged)

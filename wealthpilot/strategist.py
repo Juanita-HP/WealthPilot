@@ -33,6 +33,8 @@ BLOCKS = {
     "us_equity": "SPY",
     "us_equity_esg": "ESGV",
     "us_growth": "QQQ",
+    "intl_equity": "XEF.TO",
+    "em_equity": "XEC.TO",
     "canadian_bonds": "XBB.TO",
     "us_bonds": "AGG",
     "cash": "ZST.TO",
@@ -93,6 +95,7 @@ class Allocation:
     notes: list[str] = field(default_factory=list)
     evidence: dict = field(default_factory=dict)
     equity_share: float | None = None   # target stock share before themes, used for the return assumption
+    equity_split: tuple | None = None   # (Canada, U.S., international, emerging) actually used
 
     def to_dict(self):
         return asdict(self)
@@ -117,12 +120,22 @@ def evidence(prices: pd.DataFrame | None) -> dict:
         "corr_xbb_agg": corr("XBB.TO", "AGG"), "corr_gld_spy": corr("GLD", "SPY"),
         "corr_btc_eth": corr("BTC-USD", "ETH-USD"),
         "mdd_zst": mdd("ZST.TO"), "mdd_btc": mdd("BTC-USD"), "mdd_eth": mdd("ETH-USD"),
+        **({"corr_xef_spy": corr("XEF.TO", "SPY"), "corr_xec_spy": corr("XEC.TO", "SPY")}
+           if {"XEF.TO", "XEC.TO"} <= set(prices.columns) else {}),
     }
 
 
 def _q(ev: dict, key: str, text: str) -> str:
     """A computed statistic for a reason, or nothing when no data was given."""
     return f" {text.format(ev[key])} ({ev['window']})." if key in ev else ""
+
+
+def international_available(prices: pd.DataFrame | None = None) -> bool:
+    """International funds can be used when their prices are loaded (scripts/fetch_international.py)."""
+    if prices is not None:
+        return all(BLOCKS[k] in prices.columns for k in ("intl_equity", "em_equity"))
+    from .data import extra_available
+    return extra_available()
 
 
 def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = None,
@@ -149,15 +162,24 @@ def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = No
     gold = min(GOLD_WEIGHT[profile.level], c.max_gold)
     defensive = 1.0 - equity - crypto - gold
 
-    # Equity sleeve
-    ca = equity * c.home_equity_share
-    us = equity - ca
+    # Equity sleeve: Canada, U.S., and the rest of the world (developed and emerging markets)
+    s_ca, s_us, s_intl, s_em = c.equity_split
+    esg = p.esg in {"prefer", "exclude"}
+    world_ok = international_available(prices)
+    if s_intl + s_em > 0 and not world_ok:
+        notes.append("International funds are not loaded (run scripts/fetch_international.py): their share of the "
+                     "stock sleeve goes to U.S. stocks for now.")
+        s_us, s_intl, s_em = s_us + s_intl + s_em, 0.0, 0.0
+    if s_intl + s_em > 0 and p.esg == "exclude":
+        notes.append("No ESG-screened international fund in this universe: with 'responsible investments only', the "
+                     "international share goes to the screened U.S. fund.")
+        s_us, s_intl, s_em = s_us + s_intl + s_em, 0.0, 0.0
+    ca, us, intl, em = equity * s_ca, equity * s_us, equity * s_intl, equity * s_em
     lines.append(Line(BLOCKS["canadian_equity"], ca, "canadian_equity",
                       f"Canadian stocks: {c.home_equity_share:.0%} of the {equity:.0%} stock share "
                       f"(region preference '{p.region}'; level {profile.level} allows "
                       f"{c.equity_min:.0%} to {c.equity_max:.0%} in stocks"
                       + (f"; {why_position}: {equity:.0%}" if why_position else "") + ")."))
-    esg = p.esg in {"prefer", "exclude"}
     tilt = 0.0
     themes = normalize_themes(p.themes)
     if "tech_ai" in themes and profile.level >= 4 and not esg:
@@ -171,7 +193,19 @@ def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = No
                           + _q(ev, "corr_spy_esgv", "Weekly correlation ESGV/SPY {:.2f}")))
         notes.append("ESGV is screened by its provider's rules; WealthPilot does not check its holdings.")
     else:
-        lines.append(Line(BLOCKS["us_equity"], us - tilt, "us_equity", "U.S. stocks through the S&P 500."))
+        lines.append(Line(BLOCKS["us_equity"], us - tilt, "us_equity",
+                          f"U.S. stocks through the S&P 500: {s_us:.0%} of the stock share."))
+    if intl > 0:
+        lines.append(Line(BLOCKS["intl_equity"], intl, "intl_equity",
+                          f"International developed stocks (Europe, Japan, Australia, ...) through XEF: {s_intl:.0%} of "
+                          "the stock share. Canada and the U.S. are about two thirds of world markets; this covers much "
+                          "of the rest, in foreign currencies (unhedged)."
+                          + (" Not ESG-screened." if esg else "") + _q(ev, "corr_xef_spy", "Weekly correlation with the S&P 500 {:.2f}")))
+    if em > 0:
+        lines.append(Line(BLOCKS["em_equity"], em, "em_equity",
+                          f"Emerging-market stocks (China, India, Taiwan, Brazil, ...) through XEC: {s_em:.0%} of the "
+                          "stock share. More volatile, with a higher planning assumption (7.5% a year vs 6.4-6.6%)."
+                          + _q(ev, "corr_xec_spy", "Weekly correlation with the S&P 500 {:.2f}")))
 
     # Defensive sleeve
     cash = defensive * CASH_SHARE[profile.level]
@@ -202,9 +236,13 @@ def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = No
         merged: list[Line] = []
         extra_bonds = sum(ln.weight for ln in lines if ln.block in {"us_bonds", "gold"})
         extra_us = sum(ln.weight for ln in lines if ln.block == "us_growth")
+        extra_intl = sum(ln.weight for ln in lines if ln.block == "em_equity")
         for ln in lines:
-            if ln.block in {"us_bonds", "gold", "us_growth"}:
+            if ln.block in {"us_bonds", "gold", "us_growth", "em_equity"}:
                 continue
+            if ln.block == "intl_equity" and extra_intl:
+                ln = Line(ln.ticker, ln.weight + extra_intl, ln.block,
+                          ln.reason + " Simplicity preference: also holds the emerging-market share.")
             if ln.block == "canadian_bonds":
                 ln = Line(ln.ticker, ln.weight + extra_bonds, ln.block,
                           ln.reason + " Simplicity preference: also holds the U.S. bond and gold shares.")
@@ -221,7 +259,7 @@ def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = No
     weights = {k: v for k, v in weights.items() if v > 1e-9}
     total = sum(weights.values())
     weights = {k: v / total for k, v in weights.items()}  # removes floating-point drift only
-    return Allocation(weights, lines, "policy rules v2", notes, ev, equity)
+    return Allocation(weights, lines, "policy rules v3", notes, ev, equity, (s_ca, s_us, s_intl, s_em))
 
 
 def _theme_satellites(lines: list[Line], themes: list[str], profile: InvestorProfile, ev: dict):
@@ -237,7 +275,8 @@ def _theme_satellites(lines: list[Line], themes: list[str], profile: InvestorPro
     if not picks:
         return lines, notes
     core = [ln for ln in lines if ln.block in {"canadian_equity", "us_equity"}]
-    stock_sleeve = sum(ln.weight for ln in lines if ln.block in {"canadian_equity", "us_equity", "us_growth"})
+    stock_sleeve = sum(ln.weight for ln in lines if ln.block in {"canadian_equity", "us_equity", "us_growth",
+                                                                   "intl_equity", "em_equity"})
     budget = stock_sleeve * SATELLITE_SHARE[profile.level]
     if budget <= 0:
         notes.append(f"Themes noted but not added: level {profile.level} keeps the whole stock share in broad funds.")

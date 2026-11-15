@@ -38,6 +38,7 @@ Copy the organizers' starter files (`prices_daily.csv`, `fx_usdcad_daily.csv`, `
 
 ```bash
 python scripts/fetch_macro_history.py   # macro history since 1995
+python scripts/fetch_international.py   # international stock funds (XEF.TO, XEC.TO) for the global split
 python scripts/train_inflation.py        # inflation model + model card
 pytest
 ```

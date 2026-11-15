@@ -545,7 +545,8 @@ def fit_score(ticker: str, risk: dict[str, Fact], asset_class: str, sector: str 
 # --------------------------------------------------------------------------- overview
 
 
-FUND_BLOCK = {"XIU.TO": "canadian_equity", "SPY": "us_equity", "QQQ": "us_equity", "ESGV": "us_equity",
+FUND_BLOCK = {"XEF.TO": "international_equity", "XEC.TO": "emerging_equity",
+              "XIU.TO": "canadian_equity", "SPY": "us_equity", "QQQ": "us_equity", "ESGV": "us_equity",
               "XBB.TO": "fixed_income", "AGG": "fixed_income", "TLT": "fixed_income", "ZST.TO": "short_term"}
 
 

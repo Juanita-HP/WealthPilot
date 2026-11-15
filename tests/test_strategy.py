@@ -35,7 +35,7 @@ def test_equity_share_inside_level_range_for_every_level():
         p = va.profile_at_level(level)
         for pos in (0.0, 0.5, 1.0):
             w = st.policy_allocation(p, equity_position=pos).weights
-            eq = w.get("XIU.TO", 0) + w.get("SPY", 0) + w.get("ESGV", 0) + w.get("QQQ", 0)
+            eq = sum(w.get(t, 0) for t in ("XIU.TO", "SPY", "ESGV", "QQQ", "XEF.TO", "XEC.TO"))
             assert p.constraints.equity_min - 1e-9 <= eq <= p.constraints.equity_max + 1e-9
 
 

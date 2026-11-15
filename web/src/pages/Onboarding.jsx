@@ -13,8 +13,10 @@ const HINTS = {
                         "7to10": "Mostly stocks", gt10: "More than stock markets have averaged" },
   esg: { none: "Financial factors first", prefer: "Use a screened fund where possible", exclude: "Only screened investments" },
   crypto: { no: "Keep crypto out", small: "A small slice at most", open: "Up to the limit of my level" },
-  region: { canada: "Home market first", balanced: "Split between the two", us: "Largest market first",
-            global: "As broad as possible" },
+  region: { canada: "Canada 60%, U.S. 30%, rest of the developed world 10%",
+            balanced: "Canada 40%, U.S. 45%, rest of the developed world 15%",
+            us: "U.S. 70%, Canada 20%, rest of the developed world 10%",
+            global: "U.S. 45%, Canada 25%, developed world 20%, emerging markets 10%" },
 };
 const EMPLOYMENT_HINT = { public: "Highest income stability", salaried: "Steady pay", retired: "Pension income",
                           contract: "Income varies", self_employed: "Income varies", student: "Limited income",

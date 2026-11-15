@@ -46,5 +46,29 @@
   "importance_mae": 1.015625,
   "relevance_accuracy": 0.859375,
   "n": 64
+ },
+ {
+  "at": "2026-11-15T04:53:24+00:00",
+  "classifier": "rules-v2",
+  "type_accuracy": 0.765625,
+  "predictive_precision": 0.7916666666666666,
+  "predictive_recall": 0.6551724137931034,
+  "category_accuracy": 0.34375,
+  "sentiment_sign_accuracy": 0.46875,
+  "importance_mae": 1.015625,
+  "relevance_accuracy": 0.859375,
+  "n": 64
+ },
+ {
+  "at": "2026-11-15T04:53:24+00:00",
+  "classifier": "rules-v3",
+  "type_accuracy": 0.765625,
+  "predictive_precision": 0.7916666666666666,
+  "predictive_recall": 0.6551724137931034,
+  "category_accuracy": 0.359375,
+  "sentiment_sign_accuracy": 0.46875,
+  "importance_mae": 1.046875,
+  "relevance_accuracy": 0.859375,
+  "n": 64
  }
 ]
