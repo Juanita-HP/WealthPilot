@@ -9,37 +9,54 @@ function VsInflation({ v }) {
     { label: "Your plan", values: v.plan.growth, color: "#172025", width: 3, order: 0 },
     ...v.holdings.map((h, i) => ({ label: h.ticker, values: h.growth, color: PALETTE[(i + 1) % PALETTE.length], width: 1.2 })),
   ], [v]);
-  const beat = v.holdings.filter(h => h.beats_inflation).length;
+  const growth = v.holdings.filter(h => h.role === "Growth");
+  const stability = v.holdings.filter(h => h.role === "Stability");
+  const y = v.yields;
   return (
     <>
       <h2 className="section-title">Our investments vs inflation</h2>
       <div className="card">
         <p style={{ marginTop: 0 }}>
           Over {v.start} to {v.end}, the cost of living rose <b>{pct(v.inflation.total, 1)}</b> ({pct(v.inflation.annual, 1)} a year).
-          Your plan grew <b>{signedPct(v.plan.total_return, 1)}</b>, that is <b className={v.plan.beats_inflation ? "up" : "down"}>
-          {signedPct(v.plan.real_annual_return, 1)} a year above inflation</b>. {beat} of its {v.holdings.length} holdings beat inflation.
+          Your plan grew <b>{signedPct(v.plan.total_return, 1)}</b>: <b className={v.plan.beats_inflation ? "up" : "down"}>
+          {signedPct(v.plan.real_annual_return, 1)} a year {v.plan.beats_inflation ? "above" : "below"} inflation</b>.
+          {growth.length > 0 && <> All {growth.length} growth funds beat inflation.</>}
+          {v.plan.expected_real_return != null && <> Looking ahead, the planning guidelines expect about{" "}
+            <b>{signedPct(v.plan.expected_real_return, 1)} a year above inflation</b> for the {pct(v.plan.expected_coverage)} of the plan they cover.</>}
         </p>
         <div className="chart-area" style={{ height: 340 }}><GrowthChart dates={v.dates} series={series} /></div>
         <p className="muted small">Growth of 100 invested at the start. Click a name in the legend to hide or show it.</p>
         <table className="data">
-          <thead><tr><th>Holding</th><th className="num">Share of plan</th><th className="num">Total</th>
-            <th className="num">Per year</th><th className="num">Per year after inflation</th><th>Beat inflation?</th></tr></thead>
+          <thead><tr><th>Holding</th><th>Role</th><th className="num">Share of plan</th>
+            <th className="num">Per year, last 5 years</th><th className="num">After inflation, last 5 years</th>
+            <th className="num">Expected after inflation</th></tr></thead>
           <tbody>
             {[v.plan, ...v.holdings].map(h => (
               <tr key={h.ticker || "plan"} style={h.ticker ? undefined : { fontWeight: 700 }}>
                 <td>{h.ticker ? <><b>{h.ticker}</b> · {h.name}</> : "Your plan"}</td>
+                <td>{h.role}</td>
                 <td className="num">{pct(h.weight)}</td>
-                <td className="num">{signedPct(h.total_return, 1)}</td>
                 <td className="num">{signedPct(h.annual_return, 1)}</td>
                 <td className={"num " + (h.beats_inflation ? "up" : "down")}>{signedPct(h.real_annual_return, 1)}</td>
-                <td>{h.beats_inflation ? "Yes" : "No"}</td>
+                <td className="num">{h.expected_real_return != null ? signedPct(h.expected_real_return, 1) : "No assumption"}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        {stability.some(h => !h.beats_inflation) && y && (
+          <div className="analysis-status">
+            <b>Why the bond funds lost to inflation here.</b> This window starts when Canada's 10-year bond yield was
+            only {y.start.toFixed(2)}%. Rates then rose as high as {y.max.toFixed(2)}%, and bond
+            prices fall when rates rise. Today they start from {y.latest.toFixed(2)}% ({y.latest_date}), and a bond
+            fund's starting yield is the main driver of its next years' return: that is why the planning guidelines
+            expect bonds to beat inflation from here. Their job in the plan is to soften falls and keep money that is
+            needed soon: the plan holds more of them for short goals, matched to each goal's horizon.
+          </div>
+        )}
         <p className="muted small">
-          {v.note} Bond and short-term funds are in the plan to cushion falls, not to beat inflation by much: judge them
-          with the worst fall above, not only with this table. Inflation: {v.inflation.source}.
+          {v.note} "Expected after inflation": {v.assumptions.source} ({pct(v.assumptions.inflation, 1)} inflation),
+          a planning assumption, not a forecast; none exists for gold, crypto or single stocks. Inflation: {v.inflation.source}.
+          {y && <> Yields: {y.source}.</>}
         </p>
       </div>
     </>

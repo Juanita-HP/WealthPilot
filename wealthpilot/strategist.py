@@ -46,6 +46,9 @@ BLOCKS = {
 CASH_SHARE = {1: 0.50, 2: 0.35, 3: 0.20, 4: 0.10, 5: 0.00}
 GOLD_WEIGHT = {1: 0.00, 2: 0.05, 3: 0.05, 4: 0.05, 5: 0.05}
 CANADIAN_BOND_SHARE = 0.75    # AGG adds USD currency risk to the safe sleeve
+# Approximate durations (years) of the defensive funds, as stated in the time machine's rate shock.
+DURATION = {"cash": 0.5, "canadian_bonds": 7.2, "us_bonds": 6.0}
+LONG_HORIZON = 10.0           # goals this long hold no cash-like fund: the emergency fund is the cash reserve
 GROWTH_TILT_MAX = 1 / 3       # at most a third of the U.S. sleeve in QQQ
 CRYPTO_STRATEGIC_SHARE = 0.5  # use half of the crypto limit, never all of it
 
@@ -138,12 +141,37 @@ def international_available(prices: pd.DataFrame | None = None) -> bool:
     return extra_available()
 
 
+def cash_share_for(level: int, horizon_years: float | None) -> tuple[float, str]:
+    """Share of the safe sleeve in ultra short-term bonds, and why (rules fixed in advance, not fitted to returns).
+
+    * Goals of LONG_HORIZON years or more: none. The money is not needed for a decade, the emergency fund already
+      holds the cash reserve, and the planning guidelines assume more for bonds (3.2%) than for short-term
+      instruments (2.4%).
+    * Shorter goals: at least the level's share, and enough for the safe sleeve's average duration not to exceed
+      the horizon (duration matching): if rates rise, the bond funds have time to earn it back before the money is
+      needed.
+    """
+    base = CASH_SHARE[level]
+    if horizon_years is None:
+        return base, f"{base:.0%} of the safe sleeve at level {level}"
+    if horizon_years >= LONG_HORIZON:
+        return 0.0, ""
+    bond_duration = CANADIAN_BOND_SHARE * DURATION["canadian_bonds"] + (1 - CANADIAN_BOND_SHARE) * DURATION["us_bonds"]
+    needed = 1 - (horizon_years - DURATION["cash"]) / (bond_duration - DURATION["cash"])
+    needed = min(max(needed, 0.0), 1.0)
+    if needed > base:
+        return needed, (f"{needed:.0%} of the safe sleeve, so that its average duration (about "
+                        f"{horizon_years:g} years) matches the goal's horizon")
+    return base, f"{base:.0%} of the safe sleeve at level {level}"
+
+
 def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = None,
-                      equity_position: float | None = None) -> Allocation:
+                      equity_position: float | None = None, horizon_years: float | None = None) -> Allocation:
     """Policy portfolio for a profile.
 
     ``equity_position`` places the stock share inside the level's range (0 = minimum, 1 = maximum). By default it
     follows the investor's exact risk score within the level (``profile.equity_position``).
+    ``horizon_years``: the goal's horizon, which sets the cash-like share of the safe sleeve (``cash_share_for``).
     """
     from .profile import equity_position as position_for
     why_position = None
@@ -208,12 +236,15 @@ def policy_allocation(profile: InvestorProfile, prices: pd.DataFrame | None = No
                           + _q(ev, "corr_xec_spy", "Weekly correlation with the S&P 500 {:.2f}")))
 
     # Defensive sleeve
-    cash = defensive * CASH_SHARE[profile.level]
+    share, why_cash = cash_share_for(profile.level, horizon_years)
+    cash = defensive * share
     bonds = defensive - cash
+    if horizon_years is not None and horizon_years >= LONG_HORIZON:
+        notes.append(f"No cash-like fund in this {horizon_years:g}-year goal: the emergency fund is the cash reserve, "
+                     "and over ten years or more bonds are assumed to earn more than cash (3.2% vs 2.4%, FP Canada).")
     if cash > 0:
         lines.append(Line(BLOCKS["cash"], cash, "cash",
-                          f"Ultra short-term bonds (cash-like): {CASH_SHARE[profile.level]:.0%} of the safe sleeve "
-                          f"at level {profile.level}." + _q(ev, "mdd_zst", "Worst drop {:.1%}")))
+                          f"Ultra short-term bonds (cash-like): {why_cash}." + _q(ev, "mdd_zst", "Worst drop {:.1%}")))
     lines.append(Line(BLOCKS["canadian_bonds"], bonds * CANADIAN_BOND_SHARE, "canadian_bonds",
                       "Canadian bonds: most of the bond sleeve, in CAD, so the safe part carries no currency risk."))
     lines.append(Line(BLOCKS["us_bonds"], bonds * (1 - CANADIAN_BOND_SHARE), "us_bonds",

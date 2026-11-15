@@ -176,3 +176,10 @@ def test_time_machine_compares_holdings_with_inflation(client):
     assert abs(sum(h["weight"] for h in v["holdings"]) - 1) < 0.02
     for h in v["holdings"]:
         assert h["beats_inflation"] == (h["real_annual_return"] > 0)
+        assert h["role"] in {"Growth", "Stability", "Cash reserve", "Diversifier", "Single stock (theme)"}
+        if h["role"] in {"Diversifier", "Single stock (theme)"}:
+            assert h["expected_real_return"] is None          # no planning assumption is invented
+        else:
+            assert h["expected_real_return"] is not None
+    assert v["plan"]["expected_real_return"] > 0 and 0 < v["plan"]["expected_coverage"] <= 1
+    assert v["yields"]["start"] < v["yields"]["latest"]          # bonds started this window at low yields
