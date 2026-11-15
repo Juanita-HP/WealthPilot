@@ -86,3 +86,37 @@ def test_hype_challenge_in_advocate():
     rv = advocate.review_trade("TSLA", 0.05, strategist.policy_allocation(rob, px).weights, rob, px, u, news_digest=dg)
     hype = [c for c in rv.challenges if c.code == "HYPE"]
     assert hype and "Tesla reports deliveries" in hype[0].counterpoint
+
+
+def test_suffixed_symbols_are_searched_by_name():
+    asked = []
+
+    def search(q, n):
+        asked.append(q)
+        return [{"title": "Royal Bank posts record profit", "publisher": "Reuters", "providerPublishTime": 1_763_000_000,
+                 "uuid": "u1", "link": "https://x"}]
+    hs = news.fetch_headlines("RY.TO", 5, search)
+    assert asked == ["Royal Bank"] and hs[0].ticker == "RY.TO"
+    asked.clear()
+    news.fetch_headlines("BTC-USD", 5, search)
+    assert asked == ["Bitcoin"]
+
+
+def test_empty_search_retries_with_the_name():
+    asked = []
+
+    def search(q, n):
+        asked.append(q)
+        return [] if q == "AAPL" else [{"title": "Apple launches a phone", "publisher": "Reuters",
+                                        "providerPublishTime": 1_763_000_000, "uuid": "u2", "link": ""}]
+    hs = news.fetch_headlines("AAPL", 5, search)
+    assert asked == ["AAPL", "Apple"] and hs and hs[0].ticker == "AAPL"
+
+
+def test_digest_lists_esg_and_legal_controversies():
+    rows = [h("Enbridge pipeline spill draws regulator fine", ticker="ENB.TO"),
+            h("Enbridge faces lawsuit over oil sands emissions", ticker="ENB.TO", publisher="Bloomberg"),
+            h("Enbridge raises its dividend", ticker="ENB.TO")]
+    d = news.digest("ENB.TO", rows)
+    titles = [c["title"] for c in d.controversies]
+    assert len(titles) == 2 and "Enbridge raises its dividend" not in titles

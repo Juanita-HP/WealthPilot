@@ -351,3 +351,14 @@ table.data td.num,table.data th.num{text-align:right;white-space:nowrap}
 .r2-step.current.green{background:#e8f3ef;color:#0f6a50;border-color:#a9d3c4}
 .model-block .small{margin-top:12px;color:#4b5356}
 @media(max-width:650px){.r2-scale{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* News vs measured data */
+.insight{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:18px;align-items:start}
+.insight-col{background:#f7f6f3;border-radius:12px;padding:16px 18px}
+.insight-col .kicker{font-size:11px;color:#a18b65;text-transform:uppercase;letter-spacing:.8px;font-weight:600;margin-bottom:6px}
+.insight-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #ebe8e2;font-size:13px}
+.insight-row:last-child{border-bottom:0}
+.insight-row span{color:#5d6466}
+.insight-note{grid-column:1/-1;font-size:12px;color:var(--muted);line-height:1.7;margin:4px 0 0}
+.insight .primary-btn{grid-column:1/-1;justify-self:start}
+@media(max-width:650px){.insight{grid-template-columns:1fr}}

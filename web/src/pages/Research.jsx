@@ -342,6 +342,36 @@ export default function Research({ symbol }) {
         {newsData && !newsData.available && <div className="analysis-status">{newsData.note}</div>}
         {dg && dg.n === 0 && <div className="analysis-status">No recent headline is really about this company.</div>}
         {dg && dg.n > 0 && (
+          <div className="insight">
+            <div className="insight-col">
+              <div className="kicker">Media signal</div>
+              <div className="insight-row"><span>Opinions or forecasts</span><strong>{Math.round(dg.share_predictive * 100)}%</strong></div>
+              <div className="insight-row"><span>Hype (opinions from low-trust sources)</span><strong>{Math.round(dg.hype_share * 100)}%</strong></div>
+              <div className="insight-row"><span>ESG or regulatory signals</span><strong>{dg.controversies?.length || 0}</strong></div>
+            </div>
+            <div className="insight-col">
+              <div className="kicker">Measured reality (5-year data)</div>
+              <div className="insight-row"><span>Annualized volatility</span><strong>{ins ? pct(ins.stats.volatility, 1) : "…"}</strong></div>
+              <div className="insight-row"><span>Worst fall over 5 years</span><strong>{ins && num(ins.stats.max_drawdown) ? "−" + pct(ins.stats.max_drawdown, 1) : "…"}</strong></div>
+              <div className="insight-row"><span>Fit with your profile</span>
+                <strong>{ins ? `${ins.fit.label} — ${num(ins.fit.score) ? Math.round(ins.fit.score) : "—"}/100` : "…"}</strong></div>
+            </div>
+            <p className="insight-note">
+              Headlines say what is being talked about; the price data says what holding it has been like. When the two
+              disagree, trust the measured data and read the original sources.
+            </p>
+            <button type="button" className="primary-btn" onClick={() => { try { sessionStorage.setItem("wp_advocate_symbol", ticker); } catch { /* storage off */ } go("advocate"); }}>
+              Challenge this stock with the Devil's Advocate →
+            </button>
+          </div>
+        )}
+        {dg?.controversies?.length > 0 && (
+          <div className="analysis-status">
+            <b>ESG or regulatory headlines:</b>{" "}
+            {dg.controversies.map(c => `${c.title} (${c.publisher})`).join(" · ")}
+          </div>
+        )}
+        {dg && dg.n > 0 && (
           <>
             <div className="analysis-status">
               Of {dg.n} recent headlines, <b>{dg.n - Math.round(dg.share_predictive * dg.n)} report facts</b> and{" "}

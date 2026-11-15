@@ -107,12 +107,26 @@ def yahoo_search(query: str, count: int) -> list[dict]:
         return json.load(r).get("news", [])
 
 
+def search_query(ticker: str) -> str:
+    """What to ask the search engine: Yahoo's news search finds nothing for suffixed symbols (RY.TO, BTC-USD), so
+    those are searched by company or asset name ("Royal Bank", "Bitcoin")."""
+    return NAME_KEYWORDS.get(ticker, [ticker.split(".")[0].split("-")[0]])[0]
+
+
 def fetch_headlines(ticker: str, count: int = 20, search=None) -> list[Headline]:
-    """Recent headlines for one ticker. ``search`` is injectable for tests."""
+    """Recent headlines for one ticker. ``search`` is injectable for tests.
+
+    Suffixed symbols (``.TO``, ``-USD``) are searched by name directly; any other symbol that returns nothing is
+    searched again by name. Headlines keep ``ticker=ticker`` either way.
+    """
     search = search or yahoo_search
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    suffixed = ".TO" in ticker or "-USD" in ticker
+    items = search(search_query(ticker), count) if suffixed else search(ticker, count)
+    if not items and not suffixed and search_query(ticker) != ticker:
+        items = search(search_query(ticker), count)
     out = []
-    for item in search(ticker, count) or []:
+    for item in items or []:
         ts = item.get("providerPublishTime")
         if not item.get("title") or ts is None:
             continue
@@ -195,7 +209,8 @@ CATEGORY_CUES = [
     ("management", r"\b(ceo|cfo|chief|board|appoints?|resigns?|exit|founder|reinstate[ds]?|ousted|ouster|fired|"
                    r"steps? down|departure|successor|leadership)\b"),
     ("macro", r"\b(fed|rates?|inflation|cpi|tariff|recession|bank of canada|jobs report|economy)\b"),
-    ("esg_controversy", r"\b(emissions|climate|spill|pollution|labor|union|strike|safety|recall|scandal|controvers)\w*"),
+    ("esg_controversy", r"\b(emissions?|carbon|climate|oil sands|tar sands|fossil|spill|pipeline|pollution|environmental|"
+                        r"labor|union|strike|safety|recall|scandal|controvers\w*|lawsuit|fine[ds]?)\b"),
     ("product", r"\b(launch|pre-orders?|product|model|chip|cybercab|robotaxi|ai|factory|plant|software)\b"),
     ("market_move", r"\b(shares|stock|soars?|plunges?|jumps?|slumps?|rally|sell-off|record high)\b"),
 ]
@@ -204,8 +219,8 @@ NEG = re.compile(r"\b(miss|plunge|slump|fall|fell|cut|lawsuit|probe|recall|weak|
 
 
 class RuleClassifier:
-    """Offline baseline (version rules-v3): keyword cues, documented and deterministic."""
-    name = "rules-v3"
+    """Offline baseline (version rules-v4): keyword cues, documented and deterministic."""
+    name = "rules-v4"
 
     def classify(self, h: dict) -> Label:
         title = h["title"]
@@ -312,6 +327,7 @@ class Digest:
     top_predictive: list[dict]
     classifier: str
     notes: list[str] = field(default_factory=list)
+    controversies: list[dict] = field(default_factory=list)   # ESG or legal/regulatory headlines, external evidence
 
     def to_dict(self):
         return asdict(self)
@@ -350,9 +366,11 @@ def digest(ticker: str, headlines: list[dict], classifier=None, as_of: str | Non
              f"{dropped} loosely related headline(s) left out as not about {ticker}."]
     if n < 5:
         notes.append(f"Only {n} headlines: too few for conclusions.")
+    controversies = [slim(r) for r in sorted(rows, key=key)
+                     if r["label"]["category"] in ("esg_controversy", "legal_regulatory")][:3]
     return Digest(ticker, n, f"{dates[0][:10]} to {dates[-1][:10]}", len(pred) / n, len(low) / n, len(hype) / n,
                   sent, cats, [slim(r) for r in sorted([r for r in rows if r not in pred], key=key)[:5]],
-                  [slim(r) for r in sorted(pred, key=key)[:5]], classifier.name, notes)
+                  [slim(r) for r in sorted(pred, key=key)[:5]], classifier.name, notes, controversies)
 
 
 def recent_headlines(ticker: str, max_age_hours: float = 12.0, count: int = 20, search=None) -> list[dict]:

@@ -93,3 +93,17 @@ def test_no_recent_news_warning_without_signal():
     idx = pd.bdate_range("2024-01-01", periods=400)
     calm = pd.DataFrame({"AAA": 100 * np.cumprod(1 + np.full(400, 0.0005) + np.random.default_rng(1).normal(0, 0.01, 400))}, index=idx)
     assert adv.recent_news_challenge("AAA", pf.build_profile(ROBERT), calm, {"n": 0}) is None
+
+
+def test_esg_controversy_only_for_investors_with_esg_preferences():
+    digest = {"n": 8, "by_category": {"esg_controversy": 2, "legal_regulatory": 1}, "controversies": [
+        {"title": "Pipeline spill draws a fine", "publisher": "Reuters", "published_at": "2026-11-12T10:00:00+00:00"}]}
+    u = pd.DataFrame({"name": ["ESG fund"]}, index=pd.Index(["ESGV"]))
+    neutral = pf.build_profile(ROBERT)
+    strict = pf.build_profile(ROBERT, pf.Preferences(esg="exclude"))
+    prefer = pf.build_profile(ROBERT, pf.Preferences(values=("no_fossil_fuels",)))
+    assert adv.esg_controversy_challenge(neutral, digest, u) is None
+    c = adv.esg_controversy_challenge(strict, digest, u)
+    assert c.severity == "warning" and "3 of the 8" in c.claim and "Pipeline spill" in c.claim and "ESGV" in c.counterpoint
+    assert adv.esg_controversy_challenge(prefer, digest, u).severity == "info"
+    assert adv.esg_controversy_challenge(strict, {"n": 5, "by_category": {}, "controversies": []}, u) is None

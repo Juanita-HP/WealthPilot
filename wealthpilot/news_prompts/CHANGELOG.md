@@ -35,3 +35,9 @@ Added leadership cues to the management category ("reinstate", "ousted", "fired"
 "successor", "leadership") after the NVDA headlines about Jensen Huang's exit were filed under "other". On golden_v0:
 category accuracy 34% to 36%, type accuracy unchanged (77%), importance error 1.02 to 1.05. Material categories feed
 the devil's advocate's recent-news warning, so missing a leadership change mattered more than the small error change.
+
+## rules-v4 (baseline update)
+Broader ESG controversy cues (carbon, oil sands, fossil, pipeline, environmental, lawsuits and fines) so that investors
+with ESG preferences see external evidence; the digest now lists up to three ESG or legal/regulatory headlines
+(`controversies`). Golden_v0 scores unchanged (type 77%, category 36%). Also: Yahoo's search returns nothing for
+suffixed symbols (RY.TO, BTC-USD), so those are now searched by name ("Royal Bank", "Bitcoin").

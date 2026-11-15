@@ -5,7 +5,9 @@ const METRICS = [["cagr", "Annual return", true], ["volatility", "Volatility", t
 
 export default function Advocate() {
   const [universe, setUniverse] = useState([]);
-  const [symbol, setSymbol] = useState("TSLA");
+  // A stock sent from its research page ("Challenge this stock with the Devil's Advocate").
+  const [fromResearch] = useState(() => { try { return sessionStorage.getItem("wp_advocate_symbol"); } catch { return null; } });
+  const [symbol, setSymbol] = useState(fromResearch || "TSLA");
   const [weight, setWeight] = useState(30);
   const [review, setReview] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -14,6 +16,8 @@ export default function Advocate() {
   const [answer, setAnswer] = useState(null);
 
   useEffect(() => { api("/universe").then(setUniverse).catch(e => setError(e.message)); }, []);
+  useEffect(() => { try { sessionStorage.removeItem("wp_advocate_symbol"); } catch { /* storage off */ } }, []);
+  const suggested = "Ask the AI agents to analyze how recent news and risks on " + symbol + " affect my profile";
 
   const run = async () => {
     setBusy(true); setError("");
@@ -21,7 +25,15 @@ export default function Advocate() {
     catch (e) { setError(e.message); }
     finally { setBusy(false); }
   };
-  useEffect(() => { if (universe.length) run(); }, [universe.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!universe.length) return;
+    if (!universe.some(u => u.ticker === symbol)) {
+      setError(`${symbol} is not in the simulation's asset universe yet: the devil's advocate reviews listed assets only.`);
+      setSymbol("TSLA");
+      return;
+    }
+    run();
+  }, [universe.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ask = async () => {
     setAnswer({ loading: true });
@@ -91,6 +103,9 @@ export default function Advocate() {
         <p style={{ marginTop: 0 }} className="muted small">
           Claude agents on Amazon Bedrock: an advisor, a devil's advocate and a verifier that checks every number against the calculations.
         </p>
+        <button type="button" className="quiet-btn" style={{ marginBottom: 12 }} onClick={() => setQuestion(suggested)}>
+          {suggested}
+        </button>
         <div className="field">
           <textarea placeholder="For example: should I put more into Canadian banks?" value={question} onChange={e => setQuestion(e.target.value)} />
         </div>
