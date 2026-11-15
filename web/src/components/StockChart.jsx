@@ -30,13 +30,22 @@ const chartGuide = {
   },
 };
 
+const labels0 = range => ({ "5d": "5 days ago", "1mo": "a month ago", "3mo": "3 months ago", "6mo": "6 months ago",
+                           ytd: "January 1", "1y": "a year ago", "5y": "5 years ago", max: "listing" }[range] || "start");
+
 const PERIODS = [["1d", "1D"], ["5d", "5D"], ["1mo", "1M"], ["3mo", "3M"], ["6mo", "6M"], ["ytd", "YTD"], ["1y", "1Y"], ["5y", "5Y"], ["max", "MAX"]];
 
-export default function StockChart({ ticker, currency }) {
+export const PERIOD_LABEL = { "1d": "today", "5d": "past 5 days", "1mo": "past month", "3mo": "past 3 months",
+                              "6mo": "past 6 months", "ytd": "year to date", "1y": "past year", "5y": "past 5 years",
+                              "max": "since listing" };
+
+// onPeriod({range, base, last}) reports the price at the start of the period and the latest price, so the page header
+// can show the change over the selected timeframe (1D: against the previous close, as Yahoo does).
+export default function StockChart({ ticker, currency, onPeriod }) {
   const canvas = useRef(null);
   const chart = useRef(null);
   const [range, setRange] = useState("1d");
-  const [readout, setReadout] = useState({ price: "—", date: "Hover to inspect historical prices" });
+  const [readout, setReadout] = useState({ price: "—", date: "Hover to inspect historical prices", change: null });
   const [status, setStatus] = useState("");
 
   useEffect(() => { setRange("1d"); }, [ticker]);
@@ -64,8 +73,14 @@ export default function StockChart({ ticker, currency }) {
         const labels = data.map(p => p.isOpeningPoint ? "Market Open" : new Date(p.t).toLocaleString("en-CA", intraday
           ? { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }
           : { year: "numeric", month: "short", day: "numeric" }));
-        const update = i => data[i] && setReadout({ price: money(data[i].close), date: labels[i] });
+        const meta = r.meta || {};
+        const firstReal = data.find(p => !p.isOpeningPoint)?.close;
+        const prevClose = num(meta.chartPreviousClose) ? meta.chartPreviousClose : meta.previousClose;
+        const base = range === "1d" && num(prevClose) ? prevClose : firstReal;
+        const update = i => data[i] && setReadout({ price: money(data[i].close), date: labels[i],
+                                                    change: num(base) && base ? data[i].close / base - 1 : null });
         update(data.length - 1);
+        if (onPeriod) onPeriod({ range, base, last: data.at(-1).close });
         chart.current = new Chart(canvas.current, {
           type: "line",
           data: {
@@ -104,7 +119,7 @@ export default function StockChart({ ticker, currency }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [ticker, range, currency]);
+  }, [ticker, range, currency]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => () => { if (chart.current) chart.current.destroy(); }, []);
 
@@ -117,6 +132,11 @@ export default function StockChart({ ticker, currency }) {
       </div>
       <div className="chart-readout">
         <strong>{readout.price}</strong>
+        {num(readout.change) && (
+          <b className={readout.change >= 0 ? "up" : "down"} style={{ fontSize: 13 }}>
+            {(readout.change > 0 ? "+" : "") + (readout.change * 100).toFixed(2)}% {range === "1d" ? "vs previous close" : "since " + (labels0(range))}
+          </b>
+        )}
         <span>{readout.date}</span>
       </div>
       <div className="chart-area"><canvas ref={canvas} /></div>
