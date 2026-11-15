@@ -6,7 +6,7 @@ Usage:
 
 Outputs:
     models/inflation_model.json      weights, scaler, lambda, evaluation (reloadable)
-    docs/model_card_inflation.md     human-readable summary for the documentation
+    models/model_card_inflation.md     human-readable summary for the documentation
 """
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ def main() -> None:
     art = inf.train(history)
     inf.save(art)
     forecasts = [inf.forecast(history, art, h) for h in inf.HORIZONS]
-    card = ROOT / "docs" / "model_card_inflation.md"
+    card = ROOT / "models" / "model_card_inflation.md"
     card.write_text(model_card(art, forecasts))
     for f in forecasts:
         print(f"{f.horizon_months:>2}m: {f.current_yoy:.2f}% -> {f.forecast:.2f}% [{f.low:.2f}, {f.high:.2f}] via {f.method}")
