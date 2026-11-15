@@ -129,6 +129,10 @@ def _secret() -> bytes:
     env = os.environ.get("WEALTHPILOT_SECRET")
     if env:
         return env.encode()
+    if os.environ.get("WEALTHPILOT_USERS_TABLE"):  # hosted: one key shared by every Lambda container
+        if not _SHARED_KEY:
+            _SHARED_KEY.append(accounts.token_secret())
+        return _SHARED_KEY[0]
     path = Path(os.environ.get("WEALTHPILOT_USERS_DB", accounts.DB_PATH)).parent / ".token_secret"
     try:
         if path.exists():
@@ -142,6 +146,7 @@ def _secret() -> bytes:
 
 
 _PROCESS_KEY = secrets.token_bytes(32)
+_SHARED_KEY: list[bytes] = []
 
 
 def make_token(username: str) -> str:

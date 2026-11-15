@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  WealthPilot website hosting (PolyFinances datathon). CloudFront serves the React build from a private S3
+  bucket and routes /api/* to the FastAPI app on AWS Lambda (Function URL). Accounts in DynamoDB, data in the
+  existing S3 data bucket, agents on Amazon Bedrock. Deployed with scripts/deploy_aws.sh from AWS CloudShell:
+  no access keys are created, stored or copied anywhere.
+
+Parameters:
+  DataBucketName:
+    Type: String
+    Description: Existing S3 bucket holding the starter data and model files (scripts/upload_data.py)
+  DataPrefix:
+    Type: String
+    Default: wealthpilot
+  TraceTableName:
+    Type: String
+    Default: wealthpilot-traces
+    Description: Existing DynamoDB table for the agents' audit trail
+  ModelId:
+    Type: String
+    Default: global.anthropic.claude-haiku-4-5-20251001-v1:0
+  FallbackModelId:
+    Type: String
+    Default: global.amazon.nova-2-lite-v1:0
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Architectures: [x86_64]
+
+Resources:
+  # ------------------------------------------------------------------ API (FastAPI on Lambda)
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - {AttributeName: pk, AttributeType: S}
+      KeySchema:
+        - {AttributeName: pk, KeyType: HASH}
+      SSESpecification: {SSEEnabled: true}
+      PointInTimeRecoverySpecification: {PointInTimeRecoveryEnabled: true}
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../build/api          # built by scripts/deploy_aws.sh (Linux wheels for Python 3.13)
+      Handler: wealthpilot.aws.api_handler.handler
+      MemorySize: 2048
+      Timeout: 60                    # CloudFront waits up to 60 seconds for the origin
+      EphemeralStorage: {Size: 1024}
+      Environment:
+        Variables:
+          DATA_BUCKET: !Ref DataBucketName
+          DATA_PREFIX: !Ref DataPrefix
+          WEALTHPILOT_USERS_TABLE: !Ref UsersTable
+          TRACE_TABLE: !Ref TraceTableName
+          WEALTHPILOT_LLM: bedrock
+          WEALTHPILOT_MODEL: !Ref ModelId
+          WEALTHPILOT_FALLBACK_MODEL: !Ref FallbackModelId
+      FunctionUrlConfig:
+        AuthType: NONE               # public through CloudFront; user data still needs a signed sign-in token
+        InvokeMode: BUFFERED
+      Policies:
+        - S3ReadPolicy: {BucketName: !Ref DataBucketName}
+        - DynamoDBCrudPolicy: {TableName: !Ref UsersTable}
+        - DynamoDBCrudPolicy: {TableName: !Ref TraceTableName}
+        - Statement:
+            - Effect: Allow
+              Action: [bedrock:InvokeModel, bedrock:InvokeModelWithResponseStream]
+              Resource: "*"
+
+  # Public function URLs need both lambda:InvokeFunctionUrl (added by SAM) and lambda:InvokeFunction limited to
+  # calls made through the URL (required for function URLs created since October 2025).
+  ApiFunctionInvokeViaUrl:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ApiFunction
+      Principal: "*"
+      InvokedViaFunctionUrl: true
+
+  # ------------------------------------------------------------------ website (S3 + CloudFront)
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      PublicAccessBlockConfiguration:   # private: only CloudFront can read it
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  SiteOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${AWS::StackName}-site"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # /api/*: nothing cached by default (TTL 0), the sign-in header is part of the key in case the API ever sets one
+  ApiCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub "${AWS::StackName}-api"
+        MinTTL: 0
+        DefaultTTL: 0
+        MaxTTL: 1
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingGzip: true
+          EnableAcceptEncodingBrotli: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers: [Authorization]
+          QueryStringsConfig: {QueryStringBehavior: all}
+          CookiesConfig: {CookieBehavior: none}
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: WealthPilot (simulation only)
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: site
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt SiteOriginAccessControl.Id
+            S3OriginConfig: {OriginAccessIdentity: ""}
+          - Id: api
+            DomainName: !Select [2, !Split ["/", !GetAtt ApiFunctionUrl.FunctionUrl]]
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+              OriginReadTimeout: 60
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6        # Managed-CachingOptimized
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+            Compress: true
+            CachePolicyId: !Ref ApiCachePolicy
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac  # Managed-AllViewerExceptHostHeader
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: {Service: cloudfront.amazonaws.com}
+            Action: s3:GetObject
+            Resource: !Sub "${SiteBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
+
+Outputs:
+  WebsiteUrl:
+    Description: Public address of the website
+    Value: !Sub "https://${Distribution.DomainName}"
+  SiteBucketName: {Value: !Ref SiteBucket}
+  DistributionId: {Value: !Ref Distribution}
+  ApiFunctionName: {Value: !Ref ApiFunction}
+  UsersTableName: {Value: !Ref UsersTable}
