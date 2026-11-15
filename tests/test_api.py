@@ -105,3 +105,16 @@ def test_agents_report_when_not_connected(client, monkeypatch):
     h = signup(client)
     r = client.post("/api/ask", json={"question": "hi"}, headers=h)
     assert r.status_code == 503 and "WEALTHPILOT_LLM" in r.json()["detail"]
+
+
+@requires_starter
+def test_plan_includes_the_inflation_forecast_card(client):
+    h = signup(client)
+    client.put("/api/profile", json={"onboarding": client.get("/api/meta").json()["personas"]["Mateo"]}, headers=h)
+    card = client.get("/api/plan", headers=h).json()["inflation"]
+    if card is None:
+        pytest.skip("inflation model or macro history not available")
+    assert card["low"] < card["forecast"] < card["high"] and card["horizon_months"] == 12
+    ml = card["ml"]
+    assert len(ml["top"]) == 3 and abs(ml["top"][0]["contribution"]) >= abs(ml["top"][2]["contribution"])
+    assert ml["low"] < ml["forecast"] < ml["high"] and ml["mae"] > 0

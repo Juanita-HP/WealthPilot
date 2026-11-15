@@ -348,3 +348,38 @@ def forecast(history: pd.DataFrame, artifact: dict, h: int = 12, as_of=None) -> 
     return Forecast(h, str(t.date()), str(publication_date(t).date()), str((t + pd.DateOffset(months=h)).date()),
                     yoy, preds[used], preds[used] + q[0], preds[used] + q[1], used, METHOD_LABELS[used],
                     preds, contrib, {"mae": maes, "interval_coverage": ev["methods"][used]["interval_coverage"]}, note)
+
+
+FEATURE_LABELS = {"yoy": "Current inflation", "core_yoy": "Core inflation (CPIW)", "accel_3m": "Recent acceleration (3 months)",
+                  "oil_yoy": "Oil price (1-year change)", "fx_yoy": "U.S. dollar vs CAD (1-year change)",
+                  "yield_2y": "2-year Canada bond yield", "slope_10y_2y": "Yield curve slope (10-year minus 2-year)",
+                  "us_yoy": "U.S. inflation", "us_unrate_chg": "Change in U.S. unemployment (1 year)"}
+
+
+def ridge_view(history: pd.DataFrame, artifact: dict, h: int = 12, as_of=None, top: int = 3) -> dict:
+    """What the machine-learning model (ridge) predicts and which macro variables push its prediction.
+
+    Contribution of a variable = its standardized value today times its weight, in percentage points of change
+    in inflation over h months (positive: pushes inflation up). The ridge forecast is reported next to the
+    method actually used, with both out-of-sample errors, so the investor can see which one tested better.
+    """
+    f = forecast(history, artifact, h, as_of)
+    spec = artifact["horizons"][str(h)]
+    panel = monthly_panel(history).dropna(subset=list(FEATURES))
+    t = pd.Timestamp(f.origin_month)
+    x = panel.loc[t, list(FEATURES)].to_numpy(dtype=float)
+    z = (x - np.array(spec["scaler_mean"])) / np.array(spec["scaler_scale"])
+    contrib = z * np.array(spec["weights"])
+    order = np.argsort(-np.abs(contrib))
+    q = spec["error_quantiles"]["ridge"]
+    ridge = f.all_methods["ridge"]
+    ev = spec["evaluation"]["methods"]
+    return {
+        "forecast": ridge, "low": ridge + q[0], "high": ridge + q[1],
+        "mae": ev["ridge"]["mae"], "mae_used_method": ev[f.method]["mae"], "used_method": f.method,
+        "interval_coverage": ev["ridge"]["interval_coverage"],
+        "top": [{"feature": list(FEATURES)[i], "label": FEATURE_LABELS[list(FEATURES)[i]],
+                 "value": float(x[i]), "contribution": float(contrib[i]), "why": FEATURES[list(FEATURES)[i]]}
+                for i in order[:top]],
+        "baseline": float(spec["bias"]),
+    }

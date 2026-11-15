@@ -31,7 +31,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from . import accounts, advocate, data, forecast as fc, goals as gl, lab, macro_news, news
+from . import accounts, advocate, data, forecast as fc, goals as gl, inflation as infl, lab, macro_news, news
 from . import onboarding as ob
 from . import profile as pf
 from . import risks, strategist, ticker as tk, time_machine as tm, whatif
@@ -79,6 +79,28 @@ class TTLCache:
 
 
 NEWS_CACHE = TTLCache(3600)
+INFLATION_CACHE = TTLCache(6 * 3600)
+
+
+def inflation_card(h: int = 12) -> dict | None:
+    """12-month Canadian inflation forecast: the method that tested best, and what the ML model (ridge) sees."""
+    def compute():
+        try:
+            history = pd.read_csv(data.EXTERNAL_DIR / "macro_history.csv")
+            artifact = infl.load()
+            f = infl.forecast(history, artifact, h)
+            ridge = infl.ridge_view(history, artifact, h)
+        except (FileNotFoundError, KeyError, ValueError):
+            return None
+        used = "ridge" if f.method == "ridge" else f.method
+        return {
+            "horizon_months": h, "origin_month": f.origin_month, "available_from": f.available_from,
+            "target_month": f.target_month, "current": f.current_yoy, "forecast": f.forecast, "low": f.low,
+            "high": f.high, "method": used, "method_label": f.method_label, "mae": f.evaluation["mae"],
+            "interval_coverage": f.evaluation["interval_coverage"], "note": f.note, "ml": ridge,
+            "long_run_assumption": pf.assumptions.INFLATION, "target": infl.TARGET,
+        }
+    return INFLATION_CACHE.get(h, compute)
 INSIGHT_CACHE = TTLCache(900)
 
 
@@ -468,7 +490,8 @@ def plan(user: str = Depends(current_user)):
     rm = risks.risk_map(st["weights"], u, m["px_cad"], m["dollar_vol"], expected_nominal=profile.expected["net"])
     card = pf.level_card(profile.level)
     fin = st["onboarding"].financials
-    return {"level": profile.level, "name": card["name"], "score_10": card["score_10"], "total": p.total_amount,
+    return {"inflation": inflation_card(12),
+            "level": profile.level, "name": card["name"], "score_10": card["score_10"], "total": p.total_amount,
             "available": fin.cash_savings + fin.investments,
             "goals": goals, "notes": p.notes,
             "risks": [{"kind": r.kind, "label": RISK_LABEL[r.kind], "level": r.level, "text": risk_text(r),

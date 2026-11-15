@@ -362,3 +362,29 @@ table.data td.num,table.data th.num{text-align:right;white-space:nowrap}
 .insight-note{grid-column:1/-1;font-size:12px;color:var(--muted);line-height:1.7;margin:4px 0 0}
 .insight .primary-btn{grid-column:1/-1;justify-self:start}
 @media(max-width:650px){.insight{grid-template-columns:1fr}}
+
+/* Inflation outlook */
+.infl-head{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;margin-top:8px}
+.infl-value{font-size:38px;letter-spacing:-1.4px}
+.range-bar{position:relative;height:64px;margin:18px 6px 6px}
+.range-track{position:absolute;top:28px;left:0;right:0;height:6px;border-radius:6px;background:#eeece7}
+.range-band{position:absolute;top:28px;height:6px;border-radius:6px;background:#e5d6b8}
+.range-dot{position:absolute;top:22px;width:18px;height:18px;margin-left:-9px;border-radius:50%;background:var(--ink);border:3px solid var(--gold)}
+.range-mark{position:absolute;top:18px;width:2px;height:26px;margin-left:-1px;background:#9a9da0}
+.range-mark span{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;color:var(--muted)}
+.range-mark.target{background:var(--green)}
+.range-mark.target span{bottom:auto;top:30px;color:var(--green)}
+.range-end{position:absolute;top:40px;transform:translateX(-50%);font-size:10px;color:var(--muted)}
+.ml-panel{background:#f7f6f3;border-radius:12px;padding:16px 18px;margin-top:16px}
+.ml-panel .kicker{font-size:11px;color:#a18b65;text-transform:uppercase;letter-spacing:.8px;font-weight:600}
+.contrib{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 70px;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #ebe8e2;font-size:13px}
+.contrib:last-child{border-bottom:0}
+.contrib small{color:var(--muted)}
+.contrib-bar{position:relative;height:8px;background:#ebe8e2;border-radius:4px}
+.contrib-bar::after{content:"";position:absolute;left:50%;top:-3px;height:14px;width:1px;background:#9a9da0}
+.contrib-bar i{position:absolute;top:0;height:8px;border-radius:4px}
+.contrib-bar i.up{background:var(--red)}
+.contrib-bar i.down{background:var(--green)}
+.contrib b{text-align:right}
+.contrib b.up{color:var(--red)}.contrib b.down{color:var(--green)}
+@media(max-width:650px){.contrib{grid-template-columns:1fr 70px}.contrib-bar{grid-column:1/-1;grid-row:2}}

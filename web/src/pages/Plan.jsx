@@ -87,6 +87,74 @@ function NewsCard({ it }) {
   );
 }
 
+const pt = x => (x > 0 ? "+" : "") + x.toFixed(2) + " pt";
+const pc = x => (Math.abs(x) < 0.05 ? 0 : x).toFixed(1) + "%";
+const monthYear = iso => new Date(iso + "T12:00:00").toLocaleDateString("en-CA", { year: "numeric", month: "long" });
+
+// Range bar: the 80% interval, today's inflation and the 2% target on one scale.
+function RangeBar({ low, high, value, current, target }) {
+  const lo = Math.min(low, current, target) - 0.5, hi = Math.max(high, current, target) + 0.5;
+  const x = v => ((v - lo) / (hi - lo)) * 100 + "%";
+  return (
+    <div className="range-bar">
+      <div className="range-track" />
+      <div className="range-band" style={{ left: x(low), width: `calc(${x(high)} - ${x(low)})` }} />
+      <div className="range-mark target" style={{ left: x(target) }}><span>2% target</span></div>
+      <div className="range-mark now" style={{ left: x(current) }}><span>Today {pc(current)}</span></div>
+      <div className="range-dot" style={{ left: x(value) }} />
+      <span className="range-end" style={{ left: x(low) }}>{pc(low)}</span>
+      <span className="range-end" style={{ left: x(high) }}>{pc(high)}</span>
+    </div>
+  );
+}
+
+function InflationCard({ c }) {
+  const ml = c.ml;
+  const usedIsMl = c.method === "ridge";
+  const maxAbs = Math.max(...ml.top.map(t => Math.abs(t.contribution)), 0.01);
+  return (
+    <div className="card inflation-card">
+      <div className="kicker">Canadian inflation · next {c.horizon_months} months</div>
+      <div className="infl-head">
+        <div>
+          <strong className="infl-value">{pc(c.forecast)}</strong>
+          <span className="muted"> expected for {monthYear(c.target_month)}</span>
+        </div>
+        <div className="muted small">80% range: {pc(c.low)} to {pc(c.high)} · today {pc(c.current)} ({monthYear(c.origin_month)} data)</div>
+      </div>
+      <RangeBar low={c.low} high={c.high} value={c.forecast} current={c.current} target={c.target} />
+      <p className="small">
+        Method used: {c.method_label}. It had the lowest average error in walk-forward tests
+        ({c.mae[c.method].toFixed(2)} pt; the range held the actual value {pc(c.interval_coverage * 100)} of the time).
+      </p>
+      <div className="ml-panel">
+        <div className="kicker">What our machine-learning model sees</div>
+        <p className="small" style={{ marginTop: 6 }}>
+          Ridge regression on 9 macro variables: <b>{pc(ml.forecast)}</b> (80% range {pc(ml.low)} to {pc(ml.high)}).
+          {usedIsMl ? " It is the method used above." :
+            ` Its average error in the same tests was ${ml.mae.toFixed(2)} pt, against ${ml.mae_used_method.toFixed(2)} pt for the method used above, so it is shown for transparency, not used for the headline number.`}
+        </p>
+        <div className="small muted">The 3 variables that weigh most in its prediction (change in inflation they push, in points):</div>
+        {ml.top.map(t => (
+          <div className="contrib" key={t.feature} title={t.why}>
+            <span className="contrib-label">{t.label} <small>(now {t.value.toFixed(2)})</small></span>
+            <span className="contrib-bar">
+              <i className={t.contribution >= 0 ? "up" : "down"}
+                 style={{ width: Math.abs(t.contribution) / maxAbs * 50 + "%", [t.contribution >= 0 ? "left" : "right"]: "50%" }} />
+            </span>
+            <b className={t.contribution >= 0 ? "up" : "down"}>{pt(t.contribution)}</b>
+          </div>
+        ))}
+      </div>
+      <p className="note">
+        Forecasts of inflation are uncertain, especially after shocks (errors were about twice as large from 2020 on).
+        Your plan uses the long-run planning assumption of {pc(c.long_run_assumption * 100)} (FP Canada / IFP 2026); this
+        card shows the near term, for context.
+      </p>
+    </div>
+  );
+}
+
 export default function Plan() {
   const [plan, setPlan] = useState(null);
   const [news, setNews] = useState(null);
@@ -115,6 +183,13 @@ export default function Plan() {
       {plan.notes.map(n => <div className="pill yellow" key={n}>{n}</div>)}
 
       <div className="grid cols-3">{plan.goals.map(g => <GoalCard key={g.name} g={g} />)}</div>
+
+      {plan.inflation && (
+        <>
+          <h2 className="section-title">Inflation outlook</h2>
+          <InflationCard c={plan.inflation} />
+        </>
+      )}
 
       <h2 className="section-title">The news and your portfolio</h2>
       {!news && <div className="loading">Reading the latest official releases…</div>}
