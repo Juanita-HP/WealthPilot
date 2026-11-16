@@ -104,6 +104,7 @@ The [data report](docs/Data_Report.pdf) documents source selection, preprocessin
 | Start here | Contents |
 |---|---|
 | **[Live prototype](https://d3pmr84q14pg9z.cloudfront.net/)** | Product experience and demo personas |
+| **[Technical documentation (PDF)](docs/WealthPilot_Technical_Documentation.pdf)** | Architecture choices with the focus on AWS, agents and explainability, data and methods, validation, limits (7 pages) |
 | **[One-pager (PDF)](docs/WealthPilot_One_Pager.pdf)** ([web version](docs/ONE_PAGER.md)) | Problem, approach, originality, data, explainability, validation and user value on one page |
 | **[Data report](docs/Data_Report.pdf)** | Sources, EDA, methodology and limitations |
 | **[Solution architecture one-pager](docs/WealthPilot_Solution_Architecture.pdf)** ([web version](docs/SOLUTION_ARCHITECTURE.md)) | Architecture diagram: interface, API, agents, decision engine, data |

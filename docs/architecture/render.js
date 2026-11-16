@@ -115,6 +115,22 @@ async function checkDiagram(browser, name, src, dark) {
     console.log(`${pass ? 'PASS' : 'FAIL'} ${out}: ${pages} page(s)`);
     await page.close();
   }
+  // Technical documentation: several pages, page numbers in the footer, diagrams as the validated PNGs.
+  {
+    const page = await browser.newPage({ viewport: { width: 816, height: 1056 } });
+    await page.goto('file://' + path.join(here, 'techdoc.html'));
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForFunction(() => [...document.images].every(i => i.complete && i.naturalWidth > 0));
+    const out = 'WealthPilot_Technical_Documentation.pdf';
+    const pdf = await page.pdf({ path: path.join(docs, out), format: 'Letter', printBackground: true, preferCSSPageSize: true,
+      displayHeaderFooter: true, headerTemplate: '<span></span>',
+      footerTemplate: '<div style="width:100%;font:7px Inter,Arial,sans-serif;color:#83898b;padding:0 0.6in;display:flex;justify-content:space-between"><span>WealthPilot · Technical documentation · Team 71</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>' });
+    const pages = (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+    const pass = pages >= 6 && pages <= 8;
+    ok = ok && pass;
+    console.log(`${pass ? 'PASS' : 'FAIL'} ${out}: ${pages} page(s) (target 6 to 8)`);
+    await page.close();
+  }
   await browser.close();
   process.exit(ok ? 0 : 1);
 })();

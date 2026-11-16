@@ -1,0 +1,337 @@
+"""Technical documentation (PDF): architecture choices, with the focus on AWS, then agents, data, validation, limits.
+
+    python docs/architecture/techdoc.py        # writes docs/architecture/techdoc.html
+    node docs/architecture/render.js <mermaid.min.js>   # also renders docs/WealthPilot_Technical_Documentation.pdf
+
+Every figure comes from the repository: models/*.json and *.md (evaluations), infra/*.yaml (AWS), wealthpilot/*.py
+(rules). The diagrams are the validated images exported by render.js (solution-diagram.png, aws-diagram.png).
+"""
+
+from __future__ import annotations
+
+import html
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+TM = "™"
+
+CSS = """
+@page { size: Letter; margin: 0.55in 0.6in 0.6in; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, Helvetica, Arial, sans-serif; color: #172025; font-size: 9.3pt; line-height: 1.45; }
+section { break-after: page; }
+section:last-child { break-after: auto; }
+h1 { font-size: 24pt; letter-spacing: -0.5px; margin: 0 0 4px; }
+h2 { font-size: 15pt; margin: 0 0 6px; letter-spacing: -0.2px; }
+h3 { font-size: 10.5pt; margin: 12px 0 4px; color: #8a6d3b; text-transform: uppercase; letter-spacing: .5px; }
+p { margin: 0 0 6px; }
+ul { margin: 2px 0 6px; padding-left: 16px; } li { margin-bottom: 2px; }
+.kicker { font-size: 8pt; text-transform: uppercase; letter-spacing: 1.2px; color: #8a6d3b; margin-bottom: 4px; }
+.brand { display: flex; align-items: center; gap: 9px; margin-bottom: 26px; }
+.logo { display: flex; gap: 3px; align-items: flex-end; height: 26px; }
+.logo i { display: block; width: 6px; background: #c5ad83; }
+.logo i:nth-child(1) { height: 11px; } .logo i:nth-child(2) { height: 18px; } .logo i:nth-child(3) { height: 26px; }
+.brand b { font-size: 17pt; }
+.lead { font-size: 11pt; color: #3b4448; margin: 8px 0 14px; }
+.facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 14px; }
+.fact { border: 1px solid #e5e2dc; border-radius: 6px; padding: 8px 10px; background: #fffdf9; }
+.fact b { display: block; font-size: 15pt; } .fact span { color: #5d666a; font-size: 8pt; }
+table { width: 100%; border-collapse: collapse; font-size: 8.4pt; margin: 4px 0 8px; }
+th { text-align: left; background: #172025; color: #fff; padding: 4px 6px; font-weight: 600; }
+td { border-bottom: 1px solid #e5e2dc; padding: 3.5px 6px; vertical-align: top; }
+td:first-child { font-weight: 600; }
+img.diagram { width: 100%; border: 1px solid #e5e2dc; border-radius: 6px; margin: 4px 0 4px; }
+.cap { color: #5d666a; font-size: 7.8pt; margin-bottom: 8px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.box { border: 1px solid #e5e2dc; border-radius: 6px; padding: 7px 10px; background: #fffdf9; }
+.flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 6px 0 8px; }
+.flow div { background: #fdf8ee; border: 1px solid #e3d6bd; border-radius: 5px; padding: 6px 7px; font-size: 8.2pt; }
+.flow b { display: block; font-size: 8.8pt; }
+.toc li { margin-bottom: 3px; }
+.note { color: #5d666a; font-size: 7.8pt; }
+"""
+
+
+def table(head, rows):
+    h = "".join(f"<th>{html.escape(c)}</th>" for c in head)
+    body = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
+    return f"<table><thead><tr>{h}</tr></thead><tbody>{body}</tbody></table>"
+
+
+COVER = f"""<section>
+<div class="brand"><div class="logo"><i></i><i></i><i></i></div><b>WealthPilot</b></div>
+<div class="kicker">PolyFinances Datathon 2026 · AlphaForge AI · Team 71 · Technical documentation</div>
+<h1>Explainable, agentic investment simulation on AWS</h1>
+<p class="lead">WealthPilot builds a fictitious, goal-by-goal allocation for an investor profile, explains every figure,
+challenges risky ideas with evidence, and says when it does not know. This document justifies the architecture,
+with the focus on AWS, then the agents, the data, the validation and the limits.</p>
+<div class="facts">
+<div class="fact"><b>9</b><span>AWS services in the running system, in us-east-1</span></div>
+<div class="fact"><b>3</b><span>agent roles: Advisor, Devil's advocate, Verifier (code)</span></div>
+<div class="fact"><b>17</b><span>deterministic tools the agents can call, each producing a receipt</span></div>
+<div class="fact"><b>243</b><span>automated tests (pytest), no AWS account needed</span></div>
+</div>
+<h3>Design principle</h3>
+<p><b>Numbers come from tested code; the language model orchestrates and explains.</b> Every figure in an agent
+answer is produced by a deterministic tool, recorded as a numbered receipt (R1, R2, ...), cited in the answer, and
+checked by a verifier written in code before the investor sees it. A model cannot invent a justification after the
+fact without the verifier noticing.</p>
+<h3>Contents</h3>
+<ol class="toc">
+<li>Solution architecture: layers, and why agents plus deterministic code</li>
+<li>AWS architecture: the deployment, one request end to end, model lifecycle, security, cost</li>
+<li>AWS choices: each service, why it, and the alternatives we rejected</li>
+<li>Agents and explainability: roles, receipts, verifier, audit trail</li>
+<li>Data and methods: sources, transformations, investor profile, allocation, devil's advocate rules</li>
+<li>Validation, limits and improvements</li>
+</ol>
+<h3>Deliverables and links</h3>
+<p>Live demo: d3pmr84q14pg9z.cloudfront.net (AWS accounts close on November 16 at 13:59; afterwards the project runs
+locally with the README guide). Code: github.com/Juanita-HP/WealthPilot. One-pager: docs/WealthPilot_One_Pager.pdf.</p>
+<p class="note">Educational simulation: fictitious allocations, no real trades, not personalized financial advice,
+no confidential banking data.</p>
+</section>"""
+
+SOLUTION = f"""<section>
+<div class="kicker">1 · Solution architecture</div>
+<h2>Layers, and why agents plus deterministic code</h2>
+<img class="diagram" src="solution-diagram.png" alt="Solution architecture diagram">
+<div class="cap">Solid arrows: requests and data. Dashed arrows: tool calls, model prompts, checks. 1-2-3: the order
+the orchestrator runs the agents for one question.</div>
+{table(["Layer", "Responsibility", "Code"], [
+    ["Web interface", "React 18 + Vite single-page app: onboarding and profile, My plan, Time machine, Stocks (search, "
+     "popular and trending, research page), Devil's advocate, Watchlist.", "web/src"],
+    ["API service", "FastAPI: signed sessions (HMAC tokens), validated inputs (pydantic), one endpoint per screen, a "
+     "market-data relay for the stock page.", "wealthpilot/api.py"],
+    ["Decision engine", "Deterministic Python: investor profile, goal plans, allocation, six-risk map and metrics, time "
+     "machine and shocks, devil's advocate rules, data-coverage and liquidity rules, news analysis.",
+     "profile, goals, strategist, risks, metrics, time_machine, advocate, coverage, news, macro_news"],
+    ["Forecast models", "Inflation (ridge vs simple rules), crypto and gold returns (gradient boosting vs historical "
+     "mean), market timing (logistic regression). Used only as far as their walk-forward tests allow.",
+     "inflation, forecast, timing"],
+    ["Agent layer", "Orchestrator, Advisor and Devil's advocate (LLM with tools), Verifier and receipt ledger (code).",
+     "wealthpilot/agents"],
+    ["Storage", "Market and macro data, model artifacts, accounts and profiles, audit traces.", "data, models, accounts"],
+])}
+<h3>Why this split</h3>
+<ul>
+<li><b>Calculations are code, not language.</b> Profile levels, limits, allocations, risks and backtests are rules
+and arithmetic: deterministic, unit-tested and reproducible. An LLM computing them would be neither.</li>
+<li><b>Agents add what code cannot:</b> understanding a free-form question, choosing which tools to call, and
+explaining the result at the investor's level. The Devil's advocate gives a second, adversarial reading.</li>
+<li><b>The same engine serves screens and agents.</b> The plan page and an agent answer show the same numbers,
+because both call the same functions.</li>
+<li><b>Graceful degradation.</b> Without an LLM, everything except free-form questions still works, and the page
+says the agents are off.</li>
+</ul>
+</section>"""
+
+AWS_ARCH = f"""<section>
+<div class="kicker">2 · AWS architecture</div>
+<h2>The deployment, and one request end to end</h2>
+<img class="diagram" src="aws-diagram.png" alt="AWS architecture diagram" style="width:auto;max-width:100%;max-height:3.3in;display:block;margin:4px auto">
+<div class="cap">Everything inside the frame runs in the AWS Region us-east-1. Infrastructure as code:
+infra/hosting.yaml (site and API) and infra/training.yaml (model training), AWS SAM on AWS CloudFormation.</div>
+<h3>One question, end to end</h3>
+<div class="flow">
+<div><b>1 · Edge</b>The browser reaches Amazon CloudFront over HTTPS. Pages come from the private S3 website bucket;
+/api/* goes to the Lambda function URL.</div>
+<div><b>2 · API</b>AWS Lambda runs FastAPI (via Mangum). On a cold start it copies data and published models from the
+S3 data bucket to /tmp.</div>
+<div><b>3 · State</b>The signed session identifies the investor; the profile and plan come from the DynamoDB users
+table.</div>
+<div><b>4 · Agents</b>The orchestrator calls Amazon Bedrock (Converse API). Each tool call runs in Lambda and adds a
+receipt.</div>
+<div><b>5 · Proof</b>The verifier checks every number; the answer, its receipts and the verification are written to
+the DynamoDB traces table.</div>
+</div>
+<h3>Model lifecycle</h3>
+<p>On the 1st of each month, Amazon EventBridge Scheduler starts a small Lambda launcher, which starts an Amazon
+SageMaker AI training job in AWS's managed scikit-learn container (ml.m5.large). The job refreshes price histories,
+retrains the three models with the same walk-forward protocol, and writes <b>candidate</b> models, a comparison
+report and a snapshot of the exact data used to the S3 data bucket. Nothing goes live automatically:
+scripts/promote_models.sh shows live vs candidate results and publishes only after a human yes. A first job ran on
+November 15, 2026. In a simulated run with the image's library versions, retraining on the same data
+reproduced the live models exactly.</p>
+<div class="two">
+<div class="box"><h3 style="margin-top:2px">Security</h3><ul>
+<li>CloudFront reads the private site bucket through origin access control; the bucket is not public.</li>
+<li>The function URL sits behind CloudFront; every personal endpoint needs a signed session token (HMAC, 7 days)
+whose key is stored once in DynamoDB.</li>
+<li>Passwords: salted PBKDF2-SHA256 hashes (200,000 iterations).</li>
+<li>No AWS access key in code, configuration or CI: deployment from AWS CloudShell with the console session.</li>
+</ul></div>
+<div class="box"><h3 style="margin-top:2px">Cost and operations</h3><ul>
+<li>Pay per request: CloudFront, Lambda, DynamoDB on demand, Bedrock tokens. Idle cost is close to zero.</li>
+<li>A training job costs about 1 to 2 US cents (a few minutes on ml.m5.large).</li>
+<li>Deploy or update in one command: scripts/deploy_aws.sh (stack wealthpilot-web); training: scripts/train_aws.sh
+(stack wealthpilot-training). Re-running keeps the same address.</li>
+</ul></div>
+</div>
+</section>"""
+
+SERVICES = [
+    (f"Amazon CloudFront{TM}", "HTTPS entry point; serves the interface; routes /api/* to Lambda; caching disabled for "
+     "the API.", "One address for site and API (no CORS), HTTPS, edge caching of static files.",
+     "S3 static website hosting: public bucket, no HTTPS on the bucket endpoint."),
+    (f"Amazon S3{TM}", "Private website bucket (React build); private, versioned data bucket (starter data, macro "
+     "history, published models, training outputs).", "Durable, cheap, versioned: the data behind a result can be "
+     "identified. Read through origin access control.", "Bundling data in the Lambda package: no versioning, a "
+     "redeploy for every data change."),
+    (f"AWS Lambda{TM}", "API function (FastAPI via Mangum, Python 3.13, 2 GB, function URL); training launcher.",
+     "Pay per request, scales to zero, no server to patch. The package is built from Linux wheels without Docker "
+     "(154 MB, limit 250 MB).", "Amazon ECS or AWS App Runner: always-on cost for a demo with spiky traffic. API "
+     "Gateway: about a 30-second limit, too short for an agent turn."),
+    (f"Amazon Bedrock{TM}", "Advisor and Devil's advocate through the Converse API: Anthropic Claude Haiku 4.5, with "
+     "Amazon Nova 2 Lite as fallback if the main model declines.", "Managed models inside the AWS boundary, called "
+     "with the function's IAM role: no model API keys. Converse gives tool use with one interface for both models.",
+     "Calling an external model API: keys to store and rotate, data leaving AWS."),
+    (f"Amazon DynamoDB{TM}", "Users table (accounts, profiles, token signing key); traces table (agent turns, "
+     "receipts, verification).", "Serverless, on-demand billing, key-value access matches the data; persists across "
+     "Lambda containers; point-in-time recovery.", "Amazon RDS: always-on instance and connection handling for two "
+     "simple key-value tables. SQLite on Lambda: lost with each container."),
+    (f"Amazon SageMaker AI{TM}", "Monthly training jobs; candidate models with metrics charted in the console.",
+     "Each model traceable to its code commit, data hashes, library versions and metrics; managed scikit-learn image; "
+     "no always-on endpoint (predictions are milliseconds in Lambda).", "Training on a laptop: no audit trail. A "
+     "SageMaker endpoint: hourly cost and an extra failure point for millisecond predictions."),
+    (f"Amazon EventBridge Scheduler{TM}", "Starts the training launcher on the 1st of each month.", "Serverless "
+     "schedule, no instance.", "A cron on a server we would have to keep running."),
+    (f"Amazon CloudWatch{TM}", "Logs of the Lambda functions and training jobs; training metrics.", "Built in, nothing "
+     "to deploy.", "-"),
+    (f"AWS IAM{TM}", "One role per function and one for SageMaker, least privilege (read-only S3 where enough, PutObject "
+     "only under training/ for SageMaker).", "No access keys anywhere: deployment from AWS CloudShell, services call "
+     "each other with roles.", "Access keys in configuration: the main way AWS accounts get compromised."),
+]
+
+AWS_CHOICES = f"""<section>
+<div class="kicker">3 · AWS choices</div>
+<h2>Each service, why it, and what we rejected</h2>
+{table(["Service", "Role in WealthPilot", "Why this choice", "Alternative rejected"],
+       [[html.escape(a), html.escape(b), html.escape(c), html.escape(d)] for a, b, c, d in SERVICES])}
+</section>"""
+
+AGENTS = f"""<section>
+<div class="kicker">4 · Agents and explainability</div>
+<h2>Why each agent exists, and how an answer is proven</h2>
+{table(["Component", "Kind", "Role", "Value it adds"], [
+    ["Advisor", "LLM + tools", "Understands the question, gathers evidence with the tools, drafts the answer at the "
+     "investor's level, citing receipts.", "Turns calculations into an explanation adapted to the person."],
+    ["Devil's advocate", "LLM + review tools", "Challenges the request and the draft: profile limits, risk jump, "
+     "concentration, horizon, recency, hype, liquidity, values. States the counterpoint.",
+     "Contradicts the investor when needed (the Robert test), and agrees when the data supports them."],
+    ["Verifier", "Code", "Checks every number in the answer against the cited receipt (rounding-aware, English and "
+     "French formats); blocks trade directives, guaranteed returns and certain predictions.",
+     "Explainability that can be audited, not just asserted; no model approves its own answer."],
+    ["Orchestrator", "Code", "Fixed order: Advisor, then Devil's advocate, then Verifier; at most one revision, then "
+     "remaining problems are shown, not hidden.", "Predictable cost and latency; failures are visible."],
+])}
+<h3>The 17 tools (each call is a receipt)</h3>
+<p>build_profile, plan_goals, risk_map, what_would_change, propose_allocation, set_portfolio, replay_history,
+stress_test, compare_allocations, ticker_overview, review_trade, review_allocation, news_digest, macro_news_impact,
+strategy_lab, invest_now_or_wait, inflation_forecast. Each receipt records the tool, the agent, its inputs and its output; the
+interface shows a plain-language summary of every receipt.</p>
+<div class="two">
+<div class="box"><h3 style="margin-top:2px">Explainability by construction</h3><ul>
+<li>Numbers come only from tools; the verifier compares each with its receipt.</li>
+<li>Facts, planning assumptions (FP Canada/IFP 2026) and scenarios are labelled separately.</li>
+<li>A model that fails its test shows "Not scored"; assets without enough data are not offered for review.</li>
+<li>The devil's advocate is also deterministic for single ideas: its rules give the same answer every time.</li>
+</ul></div>
+<div class="box"><h3 style="margin-top:2px">Reliability</h3><ul>
+<li>Main model: Claude Haiku 4.5 on Bedrock; if it declines a request, Amazon Nova 2 Lite takes over, with the tool
+history translated between model families.</li>
+<li>Every turn is written to DynamoDB with its receipts and verification: any number shown can be traced to the tool
+call that produced it.</li>
+<li>Tests use a scripted model and fake AWS clients, so the full workflow is tested without network or account.</li>
+</ul></div>
+</div>
+</section>"""
+
+DATA = f"""<section>
+<div class="kicker">5 · Data and methods</div>
+<h2>Sources, transformations, and the rules that use them</h2>
+{table(["Family", "Source", "Coverage", "Transformation"], [
+    ["Markets", "Organizers' starter set (Yahoo Finance), plus two international funds", "33 assets (stocks, ETFs, gold, "
+     "bitcoin, ether), daily, Nov 2021 to Nov 2026", "Adjusted prices; one business-day calendar; USD converted to CAD "
+     "with the Bank of Canada rate"],
+    ["Economy", "Bank of Canada, Statistics Canada, FRED", "Rates, CPI, unemployment, oil, dollar index, since 1995",
+     "Each series used only after its publication date (publication lags), so no backtest sees the future"],
+    ["News", "Bank of Canada, Federal Reserve, Statistics Canada releases; company headlines", "Recent releases; "
+     "full texts read where robots.txt allows", "Decisions read from the text; each headline labelled fact or "
+     "opinion, with source trust"],
+    ["Profiles", "14-question onboarding; 3 case personas", "Goals, horizon, finances, tolerance, preferences",
+     "Scored by stated rules, validated against persona tests"],
+])}
+<div class="two">
+<div class="box"><h3 style="margin-top:2px">Investor profile and plan</h3><ul>
+<li>Risk level = the <b>lower</b> of risk capacity (what finances allow) and risk tolerance (what the person would
+live with): 5 levels, stock ranges 15-35%, 25-50%, 40-65%, 60-80%, 75-95%; crypto caps 0, 0, 2, 5, 10%.</li>
+<li>Each goal gets its own portfolio; its horizon can lower its level (under 2 years: cash only).</li>
+<li>The safe part of a goal under 10 years matches its horizon (bond duration); goals of 10 years or more hold no
+cash-like fund (the emergency fund is the cash reserve). Rules fixed in advance, not fitted to returns.</li>
+<li>Expected returns use the FP Canada/IFP 2026 planning assumptions; none is invented for gold, crypto or single
+stocks.</li>
+</ul></div>
+<div class="box"><h3 style="margin-top:2px">Devil's advocate and coverage rules</h3><ul>
+<li>Challenges: single-security and sector limits, risk concentration, risk jump (before/after backtest), hidden
+correlation, home bias, recency bias, horizon mismatch, hype, recent material news, ESG signals, news exposure,
+already owned through index funds, liquidity, leveraged funds.</li>
+<li>An asset is offered for review only with CAD or USD prices over at least 3 years, recent prices, traded volume,
+and a known sector (stocks) or a clear stock/bond/gold match (ETFs, by weekly correlation).</li>
+<li>Liquidity is flagged only when it matters: thin trading, a position of 1% or more of a normal day's volume, or
+stale prices.</li>
+</ul></div>
+</div>
+</section>"""
+
+VALIDATION = f"""<section>
+<div class="kicker">6 · Validation, limits and improvements</div>
+<h2>Tested out of sample, and reported honestly</h2>
+{table(["Model or component", "Test", "Result", "What the app does with it"], [
+    ["Inflation forecast (12 months)", "Walk-forward since 2008, mean absolute error", "Mean-reversion rule 1.04 pt, "
+     "2% target 1.05, ridge (ML) 1.43, no change 1.38", "Uses the rule with the lowest error and says so"],
+    ["Crypto and gold returns (3 months)", "Walk-forward, R² vs historical mean, Diebold-Mariano test",
+     "R² -34% bitcoin, -3% ether, -7% gold (worse than the mean)", "Gauge shows \"Not scored\"; R² and range shown"],
+    ["Market timing (ML entry signal)", "Yearly walk-forward 2010-2026, threshold chosen inside training, 0.05% cost "
+     "per side", "Beats holding in 5 to 7 of 17 years; p-values 0.92 to 1.00", "Shown as evidence that timing is "
+     "hard; never used as a signal"],
+    ["Official news reading", "Decisions read from texts vs the official series", "11 of 11 decisions found, value and "
+     "direction correct", "Explains which part of the plan a release affects"],
+    ["Headline classifier (rules, evaluated version)", "64 hand-labelled headlines", "Fact vs opinion 77%, relevance 86%",
+     "Labels each headline; never changes the plan"],
+    ["Code", "pytest: profiles and personas, plan rules, metrics, advocate, API, AWS with fakes", "243 tests pass",
+     "Run on every change"],
+])}
+<div class="two">
+<div class="box"><h3 style="margin-top:2px">Limits</h3><ul>
+<li>Five years of starter prices; only assets that still exist (survivorship bias); incomplete ESG coverage.</li>
+<li>Small samples for forecast tests; macro series from FRED are revised values.</li>
+<li>CloudFront waits at most 60 seconds: a very long agent turn can time out.</li>
+<li>Live quotes depend on Yahoo Finance, which can rate-limit requests from AWS.</li>
+<li>Educational simulation: not regulated advice, no real trades.</li>
+</ul></div>
+<div class="box"><h3 style="margin-top:2px">Improvements</h3><ul>
+<li>Amazon Cognito for identities and AWS WAF in front of CloudFront.</li>
+<li>Stream agent answers to the browser to remove the 60-second limit.</li>
+<li>Longer price histories and a licensed data and ESG provider.</li>
+<li>SageMaker Model Registry for model versions and approvals in the console.</li>
+<li>Currency-hedged foreign bonds in the safe part of short goals.</li>
+</ul></div>
+</div>
+<p class="note">Amazon Web Services, AWS, Amazon CloudFront, Amazon S3, AWS Lambda, Amazon Bedrock, Amazon DynamoDB,
+Amazon SageMaker AI, Amazon EventBridge, Amazon CloudWatch, AWS Identity and Access Management, AWS CloudFormation,
+AWS CloudShell and Amazon Nova are trademarks of Amazon.com, Inc. or its affiliates. Claude is a trademark of
+Anthropic, PBC. Names are used to identify services; no endorsement is implied.</p>
+</section>"""
+
+
+def main() -> None:
+    page = (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>WealthPilot technical documentation'
+            f'</title><style>{CSS}</style></head><body>{COVER}{SOLUTION}{AWS_ARCH}{AWS_CHOICES}{AGENTS}{DATA}'
+            f'{VALIDATION}</body></html>')
+    (HERE / "techdoc.html").write_text(page, encoding="utf-8")
+    print("wrote docs/architecture/techdoc.html")
+
+
+if __name__ == "__main__":
+    main()
