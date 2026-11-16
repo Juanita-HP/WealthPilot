@@ -11,26 +11,27 @@
 The diagram shows **where each AWS service fits in the user-facing application**. The Advisor, Devil's Advocate and deterministic Verifier are **application components**; Bedrock provides models, while the orchestration and verification code execute in Lambda.
 
 ```mermaid
+%%{init: {"flowchart": {"htmlLabels": false, "padding": 18, "nodeSpacing": 45, "rankSpacing": 55}}}%%
 flowchart TB
     USER["Investor<br/>Web browser"]
 
-    subgraph AWS["WEALTHPILOT ON AWS · us-east-1"]
+    subgraph AWS["AWS us-east-1"]
       CF["Amazon CloudFront<br/>HTTPS entry point"]
-      SITE["Amazon S3<br/>Private website bucket<br/>React + Vite build"]
-      API["AWS Lambda · Function URL<br/>FastAPI + Mangum<br/>Financial tools + agent orchestration<br/>Deterministic verifier"]
-      DATA["Amazon S3<br/>Market data + FX + macro series<br/>Published model artifacts"]
-      USERS["Amazon DynamoDB<br/>Accounts and investor profiles"]
-      BEDROCK["Amazon Bedrock<br/>Advisor + Devil's Advocate<br/>Claude Haiku 4.5 · Nova fallback"]
-      AUDIT["Amazon DynamoDB<br/>Session state + agent traces<br/>Calculation receipts"]
-      LOG["Amazon CloudWatch<br/>Lambda and training logs"]
+      SITE["Amazon S3<br/>Private website<br/>React build"]
+      API["AWS Lambda<br/>FastAPI API<br/>Financial tools<br/>Agent orchestration<br/>Deterministic verifier"]
+      DATA["Amazon S3<br/>Market, FX, macro data<br/>Published models"]
+      USERS["Amazon DynamoDB<br/>Accounts<br/>Investor profiles"]
+      BEDROCK["Amazon Bedrock<br/>Advisor + Devil's Advocate<br/>Claude Haiku 4.5<br/>Nova fallback"]
+      AUDIT["Amazon DynamoDB<br/>Agent traces<br/>Calculation receipts"]
+      LOG["Amazon CloudWatch<br/>Lambda and<br/>training logs"]
 
-      CF -->|"Static web pages"| SITE
-      CF -->|"/api/* HTTPS"| API
-      API -->|"Load datasets / models"| DATA
-      API <-->|"Account and profile data"| USERS
-      API -->|"Model requests"| BEDROCK
-      API -->|"Receipts and verification records"| AUDIT
-      API -.->|"Execution logs"| LOG
+      CF -->|"Web pages"| SITE
+      CF -->|"/api/*"| API
+      API -->|"Data, models"| DATA
+      API <-->|"Profiles"| USERS
+      API -->|"Prompts"| BEDROCK
+      API -->|"Receipts"| AUDIT
+      API -.->|"Logs"| LOG
     end
 
     USER -->|"HTTPS"| CF
@@ -57,16 +58,17 @@ flowchart TB
 The platform separates **model retraining** from **production use**. Training candidates do not automatically replace the live models.
 
 ```mermaid
+%%{init: {"flowchart": {"htmlLabels": false, "padding": 18, "nodeSpacing": 45, "rankSpacing": 55}}}%%
 flowchart LR
-    SCHED["Amazon EventBridge Scheduler<br/>Monthly schedule configured"]
-    MANUAL["Manual AWS CloudShell<br/>train_aws.sh"]
+    SCHED["EventBridge<br/>Scheduler<br/>monthly"]
+    MANUAL["CloudShell<br/>train_aws.sh<br/>on demand"]
     LAUNCH["AWS Lambda<br/>Training launcher"]
-    INPUT["Amazon S3<br/>Datasets + source package"]
-    SM["Amazon SageMaker<br/>Managed training job"]
-    CAND["Amazon S3<br/>Candidate models + evaluation"]
-    CHECK{"Human review<br/>and approval"}
+    INPUT["Amazon S3<br/>Data + code"]
+    SM["Amazon SageMaker<br/>Training job"]
+    CAND["Amazon S3<br/>Candidate models<br/>+ evaluation"]
+    CHECK{"Human<br/>review"}
     LIVE["Amazon S3<br/>Published models"]
-    API["AWS Lambda API<br/>Loads published models"]
+    API["AWS Lambda API<br/>Loads published<br/>models"]
 
     SCHED --> LAUNCH
     MANUAL --> LAUNCH
@@ -74,12 +76,12 @@ flowchart LR
     LAUNCH --> SM
     SM --> CAND
     CAND --> CHECK
-    CHECK -->|"Approved via promote_models.sh"| LIVE
+    CHECK -->|"promote_models.sh"| LIVE
     LIVE --> API
 
     classDef primary fill:#fff7e6,stroke:#c21807,color:#171717,stroke-width:2px
     classDef storage fill:#ffffff,stroke:#d5a027,color:#171717,stroke-width:1.5px
-    class SCHED,LAUNCH,SM,API primary
+    class SCHED,MANUAL,LAUNCH,SM,API primary
     class INPUT,CAND,LIVE storage
 ```
 

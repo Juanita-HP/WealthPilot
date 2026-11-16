@@ -41,7 +41,7 @@ export default function Profile({ username, onChanged, onSignOut, onDeleted }) {
       <div className="page-heading">
         <div className="eyebrow">INVESTOR PROFILE · {p.persona ? `${p.persona} (Demo Persona)` : username}</div>
         <h1>{pr.name} · {pr.score_10}/10 risk</h1>
-        <p>Recommended level. Suits {pr.suits}.</p>
+        <p>Level given by the rules from your answers. Suits {pr.suits}.</p>
       </div>
       <div className="analysis-grid" style={{ marginTop: 0 }}>
         <div className="analysis-stat"><span>Risk capacity (what your finances allow)</span><strong>{Math.round(pr.capacity)}/100</strong></div>
@@ -55,11 +55,11 @@ export default function Profile({ username, onChanged, onSignOut, onDeleted }) {
       <div className="analysis-card">
         <div className="eyebrow">YOUR CHOICE</div>
         <h2>Prefer a more cautious level?</h2>
-        <p className="analysis-status" style={{ marginTop: 0 }}>You can always choose a level below the recommended one, never above it.</p>
+        <p className="analysis-status" style={{ marginTop: 0 }}>You can always choose a level below the one your answers give, never above it.</p>
         <div className="choices three">
           {p.levels.map(l => (
             <button key={l.level} className={"choice" + (p.chosen_level === l.level ? " selected" : "")} onClick={() => chooseLevel(l.level)}>
-              <strong>{l.name}</strong><small>Level {l.level}{l.level === pr.level ? " · recommended" : ""}</small>
+              <strong>{l.name}</strong><small>Level {l.level}{l.level === pr.level ? " · from your answers" : ""}</small>
             </button>
           ))}
         </div>

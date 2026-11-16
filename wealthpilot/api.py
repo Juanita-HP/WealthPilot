@@ -254,7 +254,7 @@ FLAG_TEXT = {
     "ESG_DATA_LIMIT": "ESG preferences are applied through exclusions and a screened fund; we have no ESG ratings.",
     "CRYPTO_NO_EXPERIENCE": "Crypto turned off: your profile shows no investment experience.",
     "CRYPTO_NOT_ALLOWED": "Your level allows no crypto: a preference never overrides a limit.",
-    "LEVEL_LOWERED": "You chose a more cautious level than the one recommended.",
+    "LEVEL_LOWERED": "You chose a more cautious level than the one your answers give.",
     "HORIZON_CAP": "Your horizon limits the level of risk.",
     "NO_EMERGENCY_FUND": "You have no emergency fund.",
     "GOAL_NOT_REACHABLE": "A goal is not reachable as it stands.",
@@ -1046,7 +1046,7 @@ def _summarize_receipt(r: dict) -> dict:
             key_facts.append(f"{c.get('code', 'Alert')}: {c.get('claim', '')}")
     elif tool == "propose_allocation":
         w = out.get("weights") or {}
-        plain_title = "Recommended ETF Portfolio Allocation"
+        plain_title = "Simulated ETF Allocation"
         plain_summary = f"Built a diversified policy allocation across {len(w)} low-cost index funds for your risk level."
         top = ", ".join(f"{k} ({pct(v, 0)})" for k, v in sorted(w.items(), key=lambda x: -x[1])[:5])
         if top:
@@ -1101,7 +1101,7 @@ def _summarize_receipt(r: dict) -> dict:
         )
     elif tool == "what_would_change":
         conds = out.get("conditions") or []
-        plain_title = "What Would Change This Recommendation"
+        plain_title = "What Would Change This Simulated Allocation"
         plain_summary = f"Computed {len(conds)} concrete tipping points (horizon, cushion, or risk level changes) that would alter the plan."
         for c in conds[:3]:
             key_facts.append(f"{c.get('condition', '')} → {c.get('effect', '')}")
@@ -1135,7 +1135,7 @@ def _summarize_receipt(r: dict) -> dict:
     elif tool == "plan_goals":
         gls = out.get("goals") or []
         plain_title = "Goal-by-Goal Investment Plan"
-        plain_summary = f"Built dedicated sub-portfolios and account recommendations across {len(gls)} financial goal(s)."
+        plain_summary = f"Built a simulated sub-portfolio for each of {len(gls)} financial goal(s)."
         for g in gls[:3]:
             goal_info = g.get("goal") or {}
             key_facts.append(f"{goal_info.get('name', 'Goal')}: Level {g.get('level')} ({g.get('level_name', '')}) in {g.get('account', '')}")

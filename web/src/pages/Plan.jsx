@@ -260,9 +260,10 @@ export default function Plan() {
     <section className="page">
       <div className="page-heading plan-header">
         <div>
-          <div className="eyebrow">YOUR PLAN</div>
+          <div className="eyebrow">YOUR SIMULATED PLAN</div>
           <h1>{plan.name} profile · {plan.score_10}/10 risk</h1>
-          <p>{dollars(plan.total)} already set aside for {plan.goals.length} goal{plan.goals.length > 1 ? "s" : ""}, each invested according to its own horizon.
+          <p>{dollars(plan.total)} already set aside for {plan.goals.length} goal{plan.goals.length > 1 ? "s" : ""}, each invested according to its own horizon. A fictitious allocation built by stated rules, for learning:
+            not personalized financial advice.
             {plan.available - plan.total > 1000 ? ` ${dollars(plan.available - plan.total)} of your savings and investments is not assigned to a goal and is not invested here.` : ""}</p>
         </div>
         <button className="profile-pill" onClick={() => go("profile")}>View or edit your profile</button>
