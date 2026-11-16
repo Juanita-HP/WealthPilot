@@ -90,8 +90,12 @@ step "4/6 Build the React interface"
 step "5/6 Upload the interface"
 # Hashed files never change: cache them for a year. index.html is checked on every visit, so updates show at once.
 aws s3 sync --only-show-errors --delete web/dist "s3://$SITE_BUCKET" --exclude index.html \
-  --cache-control "public,max-age=31536000,immutable"
+  --exclude "favicon*" --exclude apple-touch-icon.png --cache-control "public,max-age=31536000,immutable"
 aws s3 cp --only-show-errors web/dist/index.html "s3://$SITE_BUCKET/index.html" --cache-control "no-cache"
+# Icons keep fixed names (no hash), so a short cache lets a new icon show up within a day.
+for icon in favicon.svg favicon-32.png apple-touch-icon.png; do
+  aws s3 cp --only-show-errors "web/dist/$icon" "s3://$SITE_BUCKET/$icon" --cache-control "public,max-age=86400"
+done
 aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/index.html" "/" >/dev/null
 
 step "6/6 Check"
