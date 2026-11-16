@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="320" viewBox="0 0 1040 320">
+<rect x="90.00" y="188.00" width="40.00" height="60.00" rx="6.00" fill="#c5ad83"/><rect x="150.00" y="152.00" width="40.00" height="96.00" rx="6.00" fill="#c5ad83"/><rect x="210.00" y="116.00" width="40.00" height="132.00" rx="6.00" fill="#c5ad83"/><path d="M 82.00 152.00 C 130.00 140.00 182.00 108.00 238.00 70.00" fill="none" stroke="#172025" stroke-width="9.00" stroke-linecap="round"/><path d="M 214.00 66.00 L 246.00 64.00 L 238.00 94.00" fill="none" stroke="#172025" stroke-width="9.00" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="320" y="190" font-family="Inter, Helvetica, Arial, sans-serif" font-size="122" font-weight="800" letter-spacing="-4" fill="#172025">Wealth<tspan fill="#c5ad83">Pilot</tspan></text>
+<text x="326" y="248" font-family="Inter, Helvetica, Arial, sans-serif" font-size="27" font-weight="600" letter-spacing="7" fill="#c5ad83">EXPLAINABLE INVESTMENT AI</text>
+</svg>
