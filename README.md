@@ -28,6 +28,48 @@ Investors face an overwhelming mix of prices, headlines and economic indicators.
 
 **[Launch WealthPilot](https://d3pmr84q14pg9z.cloudfront.net/)**
 
+## Install and run it locally
+
+**You need:** Python 3.10 or newer, Node.js 18 or newer, Git.
+
+**1. Get the code and the Python packages**
+
+```bash
+git clone https://github.com/Juanita-HP/WealthPilot.git
+cd WealthPilot
+python -m venv .venv
+source .venv/bin/activate          # Windows (PowerShell): .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+**2. Add the market data.** Copy the organizers' five starter files (`assets_universe.csv`, `prices_daily.csv`,
+`corporate_actions.csv`, `fx_usdcad_daily.csv`, `macro_rates.csv`) into `data/starter/`, or rebuild them from Yahoo
+Finance with `python scripts/build_dataset.py`. They are not in Git because Yahoo-derived data cannot be redistributed.
+The macro history and the trained models are already in the repository.
+
+**3. Build the interface and start the app**
+
+```bash
+cd web
+npm install
+npm run build
+cd ..
+python -m wealthpilot.api
+```
+
+Open **http://127.0.0.1:8000** and click a demo persona (Amira, Mateo or Robert). If port 8000 is taken, start with
+another one: `PORT=8001 python -m wealthpilot.api` (Windows PowerShell: `$env:PORT=8001; python -m wealthpilot.api`).
+
+**Optional**
+
+- **AI agents** ("Ask the advisor"): they run on Amazon Bedrock. If AWS credentials with Bedrock access are configured
+  on your machine (`pip install boto3`), the app uses them automatically. Without them, everything else works and the
+  page says the agents are off.
+- **Tests:** `pytest` (no AWS account needed).
+- **Deploy to AWS** (CloudFront, S3, Lambda, DynamoDB) and retrain the models on SageMaker:
+  see [infra/aws.md](infra/aws.md). The developer guide, with every script, is in
+  [docs/technical/DEVELOPMENT.md](docs/technical/DEVELOPMENT.md).
+
 ## What makes it different
 
 **Explainability is part of the workflow—not a paragraph added at the end.**
