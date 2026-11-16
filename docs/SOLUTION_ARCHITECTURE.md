@@ -2,7 +2,7 @@
 
 *Explainable, agentic investment simulation: how the parts fit together.* Educational simulation: fictitious allocations, no real trades, not personalized financial advice.
 
-PDF one-pager: [WealthPilot_Solution_Architecture.pdf](architecture/WealthPilot_Solution_Architecture.pdf)
+PDF one-pager: [WealthPilot_Solution_Architecture.pdf](WealthPilot_Solution_Architecture.pdf)
 
 ![Solution architecture](architecture/solution-diagram.png)
 
