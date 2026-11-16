@@ -219,7 +219,7 @@ def _md_text(s: str) -> str:
 
 def solution_md() -> str:
     out = [f"# {SOLUTION['title']}", "", f"*{SOLUTION['subtitle']}* {DISCLAIMER}",
-           "", "PDF one-pager: [WealthPilot_Solution_Architecture.pdf](architecture/WealthPilot_Solution_Architecture.pdf)",
+           "", "PDF one-pager: [WealthPilot_Solution_Architecture.pdf](WealthPilot_Solution_Architecture.pdf)",
            "", "![Solution architecture](architecture/solution-diagram.png)", "",
            "<details><summary>Mermaid source of this diagram (validated: parses, no label cut)</summary>", "",
            "```mermaid", SOLUTION_DIAGRAM.strip(), "```", "", "</details>", ""]
@@ -232,7 +232,7 @@ def solution_md() -> str:
 
 def aws_md() -> str:
     out = [f"# {AWS['title']}", "", f"*{AWS['subtitle']}* {DISCLAIMER}",
-           "", "PDF one-pager: [WealthPilot_AWS_Architecture.pdf](architecture/WealthPilot_AWS_Architecture.pdf)",
+           "", "PDF one-pager: [WealthPilot_AWS_Architecture.pdf](WealthPilot_AWS_Architecture.pdf)",
            "", "Live demo: https://d3pmr84q14pg9z.cloudfront.net/", "", "![AWS architecture](architecture/aws-diagram.png)", "",
            "<details><summary>Mermaid source of this diagram (validated: parses, no label cut)</summary>", "",
            "```mermaid", AWS_DIAGRAM.strip(), "```", "", "</details>", "",
@@ -311,13 +311,136 @@ def aws_html() -> str:
     return _page(AWS["title"], AWS["subtitle"], "", AWS_DIAGRAM, caption, body, footer, height="3.9in")
 
 
+
+# ----------------------------------------------------------------------------- solution one-pager (deliverable 4)
+# Every figure below comes from the repository: models/*.json (evaluations) and the devil's advocate on the demo
+# personas (python: api.devils_advocate). Re-check them when the models are retrained.
+
+ONE_PAGER = {
+    "title": "WealthPilot",
+    "subtitle": "Explainable AI for investment decision support. Understand the decision, challenge the assumptions, "
+                "verify the numbers.",
+    "problem": "Investors are not short of data. They struggle to judge whether an investment fits their goals, horizon, "
+               "finances and tolerance for loss, and most tools give an answer without the reasons, the assumptions or "
+               "the limits.",
+    "solution": "An educational simulation that builds a fictitious allocation for each of the investor's goals, "
+                "explains every figure, challenges risky ideas with evidence, and says when it does not know.",
+    "flow": [("Profile", "Rules, not a black box: the lower of risk capacity and risk tolerance sets one of 5 levels; "
+                         "each goal's horizon can lower it."),
+             ("Plan", "One portfolio per goal, built by stated rules; six-risk map; time machine replays 5 years and "
+                      "compares the plan with inflation."),
+             ("Devil's advocate", "Deterministic rules challenge an idea: concentration, risk jump, horizon, recency, "
+                                  "hype, liquidity, values. Always with the counterpoint."),
+             ("Agents", "On Amazon Bedrock™: an Advisor drafts, a Devil's advocate challenges, a Verifier written in "
+                        "code checks every number against its receipt (R1, R2, ...).")],
+    "personas": [
+        ("Robert, 59, retires in 4 years", "wants 25% in Tesla: \"Reconsider\". 25% against a 7.5% single-stock limit, "
+                                           "86% of the portfolio's risk, worst fall from 8.9% to 25.0%, and Tesla took "
+                                           "2.9 years to recover from a 71% fall."),
+        ("Amira, 26, growth", "15% in bitcoin goes above her crypto limit; her plan keeps a small, capped bitcoin share "
+                              "inside a diversified portfolio."),
+        ("Mateo, 41, balanced, ESG", "10% in Exxon goes against his values: his plan uses an ESG-screened U.S. fund and "
+                                     "excludes the sectors he chose."),
+    ],
+    "data": "Yahoo Finance prices for 33 assets (stocks, ETFs, gold, crypto), converted to CAD with Bank of Canada "
+            "rates; Bank of Canada, Statistics Canada and FRED series used only after their publication date; official "
+            "news (Bank of Canada, Federal Reserve, Statistics Canada) read within robots.txt; headlines labelled fact "
+            "or opinion.",
+    "validation": [
+        "Inflation: a simple mean-reversion rule beat our ridge model out of sample (12-month error 1.04 vs 1.43 "
+        "points). The app uses the rule and says so.",
+        "Crypto and gold: gradient boosting does worse than the historical average out of sample (R² −34% bitcoin, "
+        "−3% ether, −7% gold), so the gauge shows \"Not scored\".",
+        "Market timing: after realistic costs, the ML signal beats holding in only 5 to 7 of 17 test years, never "
+        "significantly. It is shown as evidence that timing is hard.",
+        "243 automated tests; agent answers are checked against receipts before they are shown.",
+    ],
+    "original": [
+        "No model approves its own answer: the verifier is code.",
+        "It refuses to guess: \"Not scored\", assets without enough data are not offered for review.",
+        "It contradicts the investor when the data says so, and agrees when the data supports them.",
+        "Facts, planning assumptions (FP Canada/IFP 2026) and scenarios are labelled separately.",
+    ],
+    "value": "Understand why an option fits or not, see the trade-offs in dollars, test an idea before acting, and "
+             "learn the reasoning, with no real money at stake.",
+    "aws": "Amazon CloudFront™, Amazon S3™, AWS Lambda™, Amazon Bedrock™, Amazon DynamoDB™, Amazon SageMaker AI™, "
+           "Amazon EventBridge Scheduler™, Amazon CloudWatch™ and AWS IAM™, in us-east-1. Details: AWS architecture "
+           "one-pager.",
+}
+
+ONE_PAGER_CSS = """
+body { font-size: 8.7pt; line-height: 1.42; }
+.tag { white-space: nowrap; }
+.lead { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 9px; }
+.lead div { border-left: 3px solid #c5ad83; padding: 2px 0 2px 9px; }
+.lead h2, .sec h2 { font-size: 9.4pt; margin: 0 0 2px; text-transform: uppercase; letter-spacing: .6px; color: #8a6d3b; }
+.lead p { margin: 0; font-size: 9.6pt; }
+.flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 10px 0 4px; }
+.step { position: relative; background: #fdf8ee; border: 1px solid #e3d6bd; padding: 6px 9px 6px 12px; margin-right: 12px; }
+.step:not(:last-child)::after { content: "→"; position: absolute; right: -12px; top: 38%; font-weight: 700; color: #8a6d3b; }
+.step b { display: block; font-size: 9.4pt; margin-bottom: 2px; }
+.sec { margin-top: 11px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+.persona { margin: 0 0 3px; }
+ul { margin: 2px 0 0; padding-left: 14px; }
+li { margin-bottom: 2px; }
+.value { margin-top: 12px; font-size: 9.4pt; background: #172025; color: #fff; padding: 7px 10px; border-radius: 6px; }
+.value b { color: #c5ad83; }
+"""
+
+
+def one_pager_html() -> str:
+    o = ONE_PAGER
+    flow = "".join(f'<div class="step"><b>{t}</b>{html.escape(x)}</div>' for t, x in o["flow"])
+    personas = "".join(f'<p class="persona"><b>{html.escape(n)}</b>: {html.escape(x)}</p>' for n, x in o["personas"])
+    li = lambda items: "<ul>" + "".join(f"<li>{html.escape(i)}</li>" for i in items) + "</ul>"  # noqa: E731
+    body = f"""
+<div class="lead"><div><h2>The problem</h2><p>{html.escape(o['problem'])}</p></div>
+<div><h2>Our solution</h2><p>{html.escape(o['solution'])}</p></div></div>
+<div class="sec"><h2>How it works</h2><div class="flow">{flow}</div></div>
+<div class="sec"><h2>It adapts to the investor (live demo personas)</h2>{personas}</div>
+<div class="two">
+  <div class="sec"><h2>Data, with its limits</h2><p>{html.escape(o['data'])} Limits: five years of starter prices,
+  survivorship bias, incomplete ESG coverage, model uncertainty.</p>
+  <h2 style="margin-top:6px">What is original</h2>{li(o['original'])}</div>
+  <div class="sec"><h2>Validated, and reported honestly</h2>{li(o['validation'])}
+  <h2 style="margin-top:6px">On AWS</h2><p>{html.escape(o['aws'])}</p></div>
+</div>
+<div class="value"><b>User value.</b> {html.escape(o['value'])}</div>"""
+    footer = (f"<p><b>{DISCLAIMER}</b> No confidential banking data. Live demo: d3pmr84q14pg9z.cloudfront.net · "
+              "Code: github.com/Juanita-HP/WealthPilot</p><p>" + AWS["trademark"] + "</p>")
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>WealthPilot one-pager</title>
+<style>{CSS}{ONE_PAGER_CSS}</style></head><body>
+<header><div><div class="brand"><div class="logo"><i></i><i></i><i></i></div><h1>{o['title']}</h1></div>
+<div class="sub">{html.escape(o['subtitle'])}</div></div><div class="tag">PolyFinances Datathon 2026<br>AlphaForge AI · National Bank × AWS</div></header>
+{body}
+<footer>{footer}</footer>
+</body></html>"""
+
+
+def one_pager_md() -> str:
+    o = ONE_PAGER
+    out = [f"# {o['title']}", "", f"*{o['subtitle']}*", "", "PDF: [WealthPilot_One_Pager.pdf](WealthPilot_One_Pager.pdf)",
+           "", "## The problem", "", o["problem"], "", "## Our solution", "", o["solution"], "", "## How it works", ""]
+    out += [f"{i}. **{t}**: {x}" for i, (t, x) in enumerate(o["flow"], 1)]
+    out += ["", "## It adapts to the investor", ""] + [f"- **{n}**: {x}" for n, x in o["personas"]]
+    out += ["", "## Data, with its limits", "", o["data"] + " Limits: five years of starter prices, survivorship bias, "
+            "incomplete ESG coverage, model uncertainty.", "", "## What is original", ""] + [f"- {i}" for i in o["original"]]
+    out += ["", "## Validated, and reported honestly", ""] + [f"- {i}" for i in o["validation"]]
+    out += ["", "## On AWS", "", o["aws"], "", "## User value", "", o["value"], "", f"*{DISCLAIMER}*", "",
+            f"<sub>{AWS['trademark']}</sub>", ""]
+    return "\n".join(out)
+
+
 def main() -> None:
     (ROOT / "docs" / "SOLUTION_ARCHITECTURE.md").write_text(solution_md(), encoding="utf-8")
     (ROOT / "docs" / "AWS_ARCHITECTURE.md").write_text(aws_md(), encoding="utf-8")
     (HERE / "solution.html").write_text(solution_html(), encoding="utf-8")
     (HERE / "aws.html").write_text(aws_html(), encoding="utf-8")
     (HERE / "diagrams.json").write_text(json.dumps({"solution": SOLUTION_DIAGRAM, "aws": AWS_DIAGRAM}), encoding="utf-8")
-    print("wrote docs/SOLUTION_ARCHITECTURE.md, docs/AWS_ARCHITECTURE.md, docs/architecture/{solution,aws}.html")
+    (ROOT / "docs" / "ONE_PAGER.md").write_text(one_pager_md(), encoding="utf-8")
+    (HERE / "onepager.html").write_text(one_pager_html(), encoding="utf-8")
+    print("wrote docs/ONE_PAGER.md, docs/SOLUTION_ARCHITECTURE.md, docs/AWS_ARCHITECTURE.md and the HTML pages")
 
 
 if __name__ == "__main__":

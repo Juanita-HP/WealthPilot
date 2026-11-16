@@ -2,7 +2,7 @@
 
 *Region us-east-1 (US East, N. Virginia). The services behind the live demo.* Educational simulation: fictitious allocations, no real trades, not personalized financial advice.
 
-PDF one-pager: [WealthPilot_AWS_Architecture.pdf](architecture/WealthPilot_AWS_Architecture.pdf)
+PDF one-pager: [WealthPilot_AWS_Architecture.pdf](WealthPilot_AWS_Architecture.pdf)
 
 Live demo: https://d3pmr84q14pg9z.cloudfront.net/
 

@@ -8,7 +8,7 @@
 
 Palantir Associates · PolyFinances Datathon 2026 · AlphaForge AI Challenge
 
-**[Explore the live demo](https://d3pmr84q14pg9z.cloudfront.net/)** &nbsp; · &nbsp; **[View the one-pager](docs/One_pager_wealthpilot.png)** &nbsp; · &nbsp; **[Data report (PDF)](docs/Data_Report.pdf)**
+**[Explore the live demo](https://d3pmr84q14pg9z.cloudfront.net/)** &nbsp; · &nbsp; **[One-pager (PDF)](docs/WealthPilot_One_Pager.pdf)** &nbsp; · &nbsp; **[AWS architecture (PDF)](docs/WealthPilot_AWS_Architecture.pdf)** &nbsp; · &nbsp; **[Data report (PDF)](docs/Data_Report.pdf)**
 
 </div>
 
@@ -62,10 +62,10 @@ The [data report](docs/Data_Report.pdf) documents source selection, preprocessin
 | Start here | Contents |
 |---|---|
 | **[Live prototype](https://d3pmr84q14pg9z.cloudfront.net/)** | Product experience and demo personas |
-| **[Project one-pager](docs/One_pager_wealthpilot.png)** | Visual overview of the problem, solution and approach |
+| **[One-pager (PDF)](docs/WealthPilot_One_Pager.pdf)** ([web version](docs/ONE_PAGER.md)) | Problem, approach, originality, data, explainability, validation and user value on one page |
 | **[Data report](docs/Data_Report.pdf)** | Sources, EDA, methodology and limitations |
-| **[Solution architecture one-pager](docs/architecture/WealthPilot_Solution_Architecture.pdf)** ([web version](docs/SOLUTION_ARCHITECTURE.md)) | Architecture diagram: interface, API, agents, decision engine, data |
-| **[AWS architecture one-pager](docs/architecture/WealthPilot_AWS_Architecture.pdf)** ([web version](docs/AWS_ARCHITECTURE.md)) | AWS diagram: Amazon CloudFront™, Amazon S3™, AWS Lambda™, Amazon Bedrock™, Amazon DynamoDB™, Amazon SageMaker AI™ |
+| **[Solution architecture one-pager](docs/WealthPilot_Solution_Architecture.pdf)** ([web version](docs/SOLUTION_ARCHITECTURE.md)) | Architecture diagram: interface, API, agents, decision engine, data |
+| **[AWS architecture one-pager](docs/WealthPilot_AWS_Architecture.pdf)** ([web version](docs/AWS_ARCHITECTURE.md)) | AWS diagram: Amazon CloudFront™, Amazon S3™, AWS Lambda™, Amazon Bedrock™, Amazon DynamoDB™, Amazon SageMaker AI™ |
 | [Technical architecture](infra/architecture.md) | Agent workflow, validation and design choices |
 | [Developer guide](docs/technical/DEVELOPMENT.md) | Setup, commands, code map and deployment details |
 

@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>WealthPilot one-pager</title>
+<style>
+@page { size: Letter; margin: 0.42in 0.5in; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, Helvetica, Arial, sans-serif; color: #172025; font-size: 7.6pt; line-height: 1.38; }
+header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #172025; padding-bottom: 6px; }
+.brand { display: flex; align-items: center; gap: 8px; }
+.logo { display: flex; gap: 2px; align-items: flex-end; height: 22px; }
+.logo i { display: block; width: 5px; background: #c5ad83; }
+.logo i:nth-child(1) { height: 10px; } .logo i:nth-child(2) { height: 16px; } .logo i:nth-child(3) { height: 22px; }
+h1 { font-size: 17pt; letter-spacing: -0.4px; margin: 0; }
+.sub { color: #5d666a; font-size: 8pt; margin-top: 2px; }
+.tag { font-size: 6.6pt; text-transform: uppercase; letter-spacing: 1px; color: #8a6d3b; text-align: right; }
+.diagram { margin: 8px auto 6px; text-align: center; font-size: 14px; line-height: normal; }
+.diagram svg { max-width: 100% !important; width: auto; height: auto; max-height: var(--dh); }
+.cap { text-align: center; color: #5d666a; font-size: 6.6pt; margin-bottom: 6px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 12px; }
+.card { border: 1px solid #e5e2dc; border-radius: 6px; padding: 6px 9px; background: #fffdf9; }
+.card h2 { font-size: 8.6pt; margin: 0 0 3px; color: #172025; }
+.card p { margin: 0 0 3px; }
+table { width: 100%; border-collapse: collapse; font-size: 7pt; }
+th { text-align: left; background: #172025; color: #fff; padding: 3px 6px; font-weight: 600; }
+td { border-bottom: 1px solid #e5e2dc; padding: 2.6px 6px; vertical-align: top; }
+td:first-child { font-weight: 600; width: 27%; }
+.notes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 7px; }
+.notes h2 { font-size: 8.2pt; margin: 0 0 2px; }
+.notes p { margin: 0; }
+footer { margin-top: 7px; border-top: 1px solid #e5e2dc; padding-top: 4px; color: #6b7275; font-size: 6.2pt; }
+footer p { margin: 0 0 2px; }
+
+body { font-size: 8.7pt; line-height: 1.42; }
+.tag { white-space: nowrap; }
+.lead { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 9px; }
+.lead div { border-left: 3px solid #c5ad83; padding: 2px 0 2px 9px; }
+.lead h2, .sec h2 { font-size: 9.4pt; margin: 0 0 2px; text-transform: uppercase; letter-spacing: .6px; color: #8a6d3b; }
+.lead p { margin: 0; font-size: 9.6pt; }
+.flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 10px 0 4px; }
+.step { position: relative; background: #fdf8ee; border: 1px solid #e3d6bd; padding: 6px 9px 6px 12px; margin-right: 12px; }
+.step:not(:last-child)::after { content: "→"; position: absolute; right: -12px; top: 38%; font-weight: 700; color: #8a6d3b; }
+.step b { display: block; font-size: 9.4pt; margin-bottom: 2px; }
+.sec { margin-top: 11px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+.persona { margin: 0 0 3px; }
+ul { margin: 2px 0 0; padding-left: 14px; }
+li { margin-bottom: 2px; }
+.value { margin-top: 12px; font-size: 9.4pt; background: #172025; color: #fff; padding: 7px 10px; border-radius: 6px; }
+.value b { color: #c5ad83; }
+</style></head><body>
+<header><div><div class="brand"><div class="logo"><i></i><i></i><i></i></div><h1>WealthPilot</h1></div>
+<div class="sub">Explainable AI for investment decision support. Understand the decision, challenge the assumptions, verify the numbers.</div></div><div class="tag">PolyFinances Datathon 2026<br>AlphaForge AI · National Bank × AWS</div></header>
+
+<div class="lead"><div><h2>The problem</h2><p>Investors are not short of data. They struggle to judge whether an investment fits their goals, horizon, finances and tolerance for loss, and most tools give an answer without the reasons, the assumptions or the limits.</p></div>
+<div><h2>Our solution</h2><p>An educational simulation that builds a fictitious allocation for each of the investor&#x27;s goals, explains every figure, challenges risky ideas with evidence, and says when it does not know.</p></div></div>
+<div class="sec"><h2>How it works</h2><div class="flow"><div class="step"><b>Profile</b>Rules, not a black box: the lower of risk capacity and risk tolerance sets one of 5 levels; each goal&#x27;s horizon can lower it.</div><div class="step"><b>Plan</b>One portfolio per goal, built by stated rules; six-risk map; time machine replays 5 years and compares the plan with inflation.</div><div class="step"><b>Devil's advocate</b>Deterministic rules challenge an idea: concentration, risk jump, horizon, recency, hype, liquidity, values. Always with the counterpoint.</div><div class="step"><b>Agents</b>On Amazon Bedrock™: an Advisor drafts, a Devil&#x27;s advocate challenges, a Verifier written in code checks every number against its receipt (R1, R2, ...).</div></div></div>
+<div class="sec"><h2>It adapts to the investor (live demo personas)</h2><p class="persona"><b>Robert, 59, retires in 4 years</b>: wants 25% in Tesla: &quot;Reconsider&quot;. 25% against a 7.5% single-stock limit, 86% of the portfolio&#x27;s risk, worst fall from 8.9% to 25.0%, and Tesla took 2.9 years to recover from a 71% fall.</p><p class="persona"><b>Amira, 26, growth</b>: 15% in bitcoin goes above her crypto limit; her plan keeps a small, capped bitcoin share inside a diversified portfolio.</p><p class="persona"><b>Mateo, 41, balanced, ESG</b>: 10% in Exxon goes against his values: his plan uses an ESG-screened U.S. fund and excludes the sectors he chose.</p></div>
+<div class="two">
+  <div class="sec"><h2>Data, with its limits</h2><p>Yahoo Finance prices for 33 assets (stocks, ETFs, gold, crypto), converted to CAD with Bank of Canada rates; Bank of Canada, Statistics Canada and FRED series used only after their publication date; official news (Bank of Canada, Federal Reserve, Statistics Canada) read within robots.txt; headlines labelled fact or opinion. Limits: five years of starter prices,
+  survivorship bias, incomplete ESG coverage, model uncertainty.</p>
+  <h2 style="margin-top:6px">What is original</h2><ul><li>No model approves its own answer: the verifier is code.</li><li>It refuses to guess: &quot;Not scored&quot;, assets without enough data are not offered for review.</li><li>It contradicts the investor when the data says so, and agrees when the data supports them.</li><li>Facts, planning assumptions (FP Canada/IFP 2026) and scenarios are labelled separately.</li></ul></div>
+  <div class="sec"><h2>Validated, and reported honestly</h2><ul><li>Inflation: a simple mean-reversion rule beat our ridge model out of sample (12-month error 1.04 vs 1.43 points). The app uses the rule and says so.</li><li>Crypto and gold: gradient boosting does worse than the historical average out of sample (R² −34% bitcoin, −3% ether, −7% gold), so the gauge shows &quot;Not scored&quot;.</li><li>Market timing: after realistic costs, the ML signal beats holding in only 5 to 7 of 17 test years, never significantly. It is shown as evidence that timing is hard.</li><li>243 automated tests; agent answers are checked against receipts before they are shown.</li></ul>
+  <h2 style="margin-top:6px">On AWS</h2><p>Amazon CloudFront™, Amazon S3™, AWS Lambda™, Amazon Bedrock™, Amazon DynamoDB™, Amazon SageMaker AI™, Amazon EventBridge Scheduler™, Amazon CloudWatch™ and AWS IAM™, in us-east-1. Details: AWS architecture one-pager.</p></div>
+</div>
+<div class="value"><b>User value.</b> Understand why an option fits or not, see the trade-offs in dollars, test an idea before acting, and learn the reasoning, with no real money at stake.</div>
+<footer><p><b>Educational simulation: fictitious allocations, no real trades, not personalized financial advice.</b> No confidential banking data. Live demo: d3pmr84q14pg9z.cloudfront.net · Code: github.com/Juanita-HP/WealthPilot</p><p>Amazon Web Services, AWS, Amazon CloudFront, Amazon S3, AWS Lambda, Amazon Bedrock, Amazon DynamoDB, Amazon SageMaker AI, Amazon EventBridge, Amazon CloudWatch, AWS Identity and Access Management, AWS CloudFormation, AWS CloudShell and Amazon Nova are trademarks of Amazon.com, Inc. or its affiliates. Claude is a trademark of Anthropic, PBC. Names are used to identify services; no endorsement is implied.</p></footer>
+</body></html>

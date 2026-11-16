@@ -93,19 +93,22 @@ async function checkDiagram(browser, name, src, dark) {
       console.log(`${pass ? 'PASS' : 'FAIL'} diagram ${name} (${dark ? 'dark' : 'light'}): ${JSON.stringify(r)}`);
     }
   }
-  for (const [file, out, name] of [['solution.html', 'WealthPilot_Solution_Architecture.pdf', 'solution'], ['aws.html', 'WealthPilot_AWS_Architecture.pdf', 'aws']]) {
+  const docs = path.join(here, '..');
+  for (const [file, out, name] of [['onepager.html', 'WealthPilot_One_Pager.pdf', null],
+                                   ['solution.html', 'WealthPilot_Solution_Architecture.pdf', 'solution'],
+                                   ['aws.html', 'WealthPilot_AWS_Architecture.pdf', 'aws']]) {
     const page = await browser.newPage({ viewport: { width: 816, height: 1056 } });
     await page.goto('file://' + path.join(here, file));
     // all: initial cuts the page's inherited font settings, so the SVG renders exactly as where it was measured
-    await page.evaluate(svg => {
+    if (name) await page.evaluate(svg => {
       document.querySelector('.diagram').innerHTML = '<div style="all: initial; display: block; font-family: Inter, Helvetica, Arial, sans-serif; font-size: 14px">' + svg + '</div>';
     }, svgs[name]);
     await page.evaluate(() => document.fonts.ready);
     // the same overflow check, inside the one-pager itself
     await page.addScriptTag({ content: labelProblems.toString() });
-    const clipped = await page.evaluate(() => labelProblems(document.querySelector('.diagram')));
+    const clipped = name ? await page.evaluate(() => labelProblems(document.querySelector('.diagram'))) : [];
     if (clipped.length) { ok = false; console.log(`FAIL ${out}: labels outside their box ${JSON.stringify(clipped)}`); }
-    const pdf = await page.pdf({ path: path.join(here, out), format: 'Letter', printBackground: true, preferCSSPageSize: true });
+    const pdf = await page.pdf({ path: path.join(docs, out), format: 'Letter', printBackground: true, preferCSSPageSize: true });
     const pages = (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
     const pass = pages === 1;
     ok = ok && pass;
