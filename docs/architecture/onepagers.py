@@ -7,10 +7,9 @@ Mermaid 11.4.1: ``npm pack mermaid@11.4.1 && tar xzf mermaid-11.4.1.tgz`` gives 
 render.js needs Playwright with Chromium. It fails if a diagram does not parse, if any label is cut or outside its
 box (light and dark themes, and inside the one-pager), or if a one-pager is longer than one page.
 
-Diagrams are Mermaid class diagrams used with UML notation: stereotypes («component», «agent», «datastore»,
-«executionEnvironment», ...), dependencies (dashed arrows), composition (filled diamond) and associations
-(solid arrows, labelled with the protocol or the data exchanged). Every element names a real part of the code or of
-the AWS templates (see the "Grounded in" lines).
+Diagrams are Mermaid flowcharts: boxes are parts of the system, frames group them by layer (or the AWS Region),
+solid arrows carry requests or data, dashed arrows are calls to tools, models or logs. Every element names a real
+part of the code or of the AWS templates (see the "Grounded in" lines).
 """
 
 from __future__ import annotations
@@ -30,177 +29,90 @@ INIT = ('%%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {'
         '"clusterBkg": "transparent", "clusterBorder": "#b8935a", "titleColor": "#8a6d3b"}}}%%')
 
 SOLUTION_DIAGRAM = INIT + '''
-classDiagram
-    direction LR
-    class Web["Web interface"] {
-        <<component>>
-        React 18 + Vite
-        Profile, plan, time machine
-        Stocks, devil's advocate
-    }
-    class API["API service"] {
-        <<component>>
-        FastAPI
-        Signed sessions
-        Input validation
-    }
-    namespace Agent_layer {
-        class Orchestrator["Agent orchestrator"] {
-            <<component>>
-            Advisor, then advocate
-            Verifier, one revision
-        }
-        class Advisor["Advisor"] {
-            <<agent>>
-            LLM with tool calls
-            Answer cites receipts
-        }
-        class Critic["Devil's advocate"] {
-            <<agent>>
-            LLM with review tools
-            Challenge and counterpoint
-        }
-        class Verifier["Verifier"] {
-            <<component>>
-            Deterministic code
-            Each number vs receipt
-            Blocks trade directives
-        }
-        class Ledger["Receipt ledger"] {
-            <<component>>
-            Receipts R1, R2, ...
-        }
-    }
-    namespace Decision_engine {
-        class Engine["Decision engine"] {
-            <<component>>
-            Profile, goals, allocation
-            Risk map and metrics
-            Time machine, scenarios
-            Advocate rules, liquidity
-            News: facts vs opinions
-        }
-        class Models["Forecast models"] {
-            <<component>>
-            Inflation, crypto and gold
-            Market timing
-            Walk-forward validated
-        }
-    }
-    namespace Storage {
-        class Data["Market and macro data"] {
-            <<datastore>>
-            Prices in CAD
-            Publication lags
-        }
-        class Stores["Accounts and traces"] {
-            <<datastore>>
-            Profiles, audit trail
-        }
-    }
-    class Providers["Public data sources"] {
-        <<external>>
-        Yahoo Finance
-        Bank of Canada, StatCan
-        FRED, official feeds
-    }
-    class LLM["LLM service"] {
-        <<external>>
-        Amazon Bedrock
-    }
+flowchart LR
+    USER(["Investor"])
+    subgraph UI["Interface"]
+        WEB["Web interface<br/>React 18 + Vite"]
+    end
+    API["API service<br/>FastAPI<br/>signed sessions, validation"]
+    subgraph AG["Agent layer"]
+        ORCH["Orchestrator<br/>fixed order, one revision"]
+        ADV["Advisor<br/>LLM + tool calls"]
+        DEV["Devil's advocate<br/>LLM + review tools"]
+        VER["Verifier<br/>deterministic code"]
+        LED["Receipt ledger<br/>R1, R2, ..."]
+    end
+    subgraph ENG["Decision engine (Python)"]
+        PROF["Profile, goals, allocation<br/>risk map, time machine"]
+        RULES["Advocate rules, liquidity<br/>news: facts vs opinions"]
+        MOD["Forecast models<br/>walk-forward tested"]
+    end
+    subgraph ST["Storage"]
+        DATA[("Market and macro data<br/>prices in CAD")]
+        ACC[("Accounts and<br/>audit trail")]
+    end
+    SRC["Public sources<br/>Yahoo Finance<br/>Bank of Canada, StatCan<br/>FRED, official feeds"]
+    LLM["Amazon Bedrock™<br/>Claude Haiku 4.5"]
 
-    Web ..> API : REST JSON
-    API ..> Engine : plan, scores, reviews
-    API ..> Orchestrator : questions
-    API ..> Stores : profiles, traces
-    Orchestrator *-- Advisor
-    Orchestrator *-- Critic
-    Orchestrator *-- Verifier
-    Advisor ..> Engine : tool calls
-    Critic ..> Engine : review tools
-    Orchestrator ..> LLM : agent prompts
-    Engine --> Ledger : receipts
-    Verifier ..> Ledger : checks
-    Engine ..> Models : forecasts
-    Engine ..> Data : reads
-    Data ..> Providers : sourced from
+    USER --> WEB
+    WEB -->|"REST JSON"| API
+    API -->|"plan, scores, reviews"| PROF
+    API -->|"questions"| ORCH
+    API --> ACC
+    ORCH -->|"1 draft"| ADV
+    ORCH -->|"2 challenge"| DEV
+    ORCH -->|"3 check"| VER
+    ADV -.->|"tool calls"| PROF
+    DEV -.->|"review tools"| RULES
+    ADV -.->|"prompts"| LLM
+    DEV -.->|"prompts"| LLM
+    PROF -->|"receipts"| LED
+    PROF --> MOD
+    VER -.->|"compares"| LED
+    MOD --> DATA
+    SRC -->|"ingested"| DATA
+
+    classDef ext fill:#ffffff,stroke:#8a8f91,stroke-dasharray:4 3,color:#172025
+    class SRC,LLM,USER ext
 '''
 
 AWS_DIAGRAM = INIT + '''
-classDiagram
-    direction TB
-    class Browser["Investor browser"] {
-        <<device>>
-    }
-    namespace AWS_Cloud_us_east_1 {
-        class CloudFront["Amazon CloudFront"] {
-            <<edge service>>
-            HTTPS distribution
-            /api/* to AWS Lambda
-            Other paths to Amazon S3
-        }
-        class Site["Amazon S3 website bucket"] {
-            <<storage>>
-            artifact: React build
-            Private, origin access control
-        }
-        class ApiFn["AWS Lambda API function"] {
-            <<executionEnvironment>>
-            Python 3.13, function URL
-            artifact: FastAPI app
-            Tools, agents, verifier
-        }
-        class Bedrock["Amazon Bedrock"] {
-            <<AI service>>
-            Converse API
-            Claude Haiku 4.5
-            Amazon Nova 2 Lite fallback
-        }
-        class Users["Amazon DynamoDB users"] {
-            <<table>>
-            Accounts, profiles
-        }
-        class Traces["Amazon DynamoDB traces"] {
-            <<table>>
-            Agent turns, receipts
-        }
-        class DataBucket["Amazon S3 data bucket"] {
-            <<storage>>
-            Market and macro data
-            Published models
-            Training outputs
-        }
-        class Logs["Amazon CloudWatch"] {
-            <<monitoring>>
-            Logs
-        }
-        class Scheduler["Amazon EventBridge Scheduler"] {
-            <<scheduler>>
-            Monthly
-        }
-        class Launcher["AWS Lambda training launcher"] {
-            <<executionEnvironment>>
-            CreateTrainingJob
-        }
-        class Training["Amazon SageMaker AI training job"] {
-            <<executionEnvironment>>
-            scikit-learn container
-            ml.m5.large
-            Candidate models
-        }
-    }
+flowchart TB
+    USER(["Investor browser"])
+    subgraph REG["AWS Cloud · Region us-east-1"]
+        CF["Amazon CloudFront™<br/>HTTPS distribution"]
+        S3W["Amazon S3™<br/>private website bucket<br/>React build"]
+        API["AWS Lambda™<br/>API function: FastAPI,<br/>tools, agents, verifier"]
+        BR["Amazon Bedrock™<br/>Claude Haiku 4.5<br/>Amazon Nova 2 Lite fallback"]
+        DDBU[("Amazon DynamoDB™<br/>users table")]
+        DDBT[("Amazon DynamoDB™<br/>traces table")]
+        S3D[("Amazon S3™<br/>data bucket: data,<br/>models, training")]
+        CW["Amazon CloudWatch™<br/>logs"]
+        subgraph TRAIN["Monthly model training"]
+            EB["Amazon EventBridge<br/>Scheduler™"]
+            LL["AWS Lambda™<br/>training launcher"]
+            SM["Amazon SageMaker AI™<br/>training job"]
+        end
+        IAM["AWS IAM™<br/>least-privilege roles"]
+    end
+    OPS["AWS CloudShell™ and<br/>AWS CloudFormation™<br/>deploy, no access keys"]
 
-    Browser --> CloudFront : HTTPS
-    CloudFront --> Site : pages
-    CloudFront --> ApiFn : HTTPS /api
-    ApiFn --> Users : read, write
-    ApiFn --> Traces : write
-    ApiFn --> DataBucket : read
-    ApiFn --> Bedrock : Converse
-    ApiFn ..> Logs : logs
-    Scheduler --> Launcher : monthly
-    Launcher --> Training : starts
-    Training --> DataBucket : reads data, writes candidates
+    USER --> CF
+    CF -->|"pages"| S3W
+    CF -->|"/api/*"| API
+    API -->|"Converse API"| BR
+    API <-->|"accounts"| DDBU
+    API -->|"receipts"| DDBT
+    API -->|"data, models"| S3D
+    API -.->|"logs"| CW
+    EB -->|"1st of month"| LL
+    LL -->|"starts"| SM
+    SM -->|"candidates"| S3D
+    IAM -.->|"roles"| API
+    OPS -.->|"stacks"| CF
+
+    classDef ext fill:#ffffff,stroke:#8a8f91,stroke-dasharray:4 3,color:#172025
+    class USER,OPS ext
 '''
 
 DISCLAIMER = "Educational simulation: fictitious allocations, no real trades, not personalized financial advice."
@@ -209,7 +121,7 @@ DISCLAIMER = "Educational simulation: fictitious allocations, no real trades, no
 
 SOLUTION = {
     "title": "WealthPilot · Solution architecture",
-    "subtitle": "Explainable, agentic investment simulation. UML component diagram.",
+    "subtitle": "Explainable, agentic investment simulation: how the parts fit together.",
     "cards": [
         ("Layers", [
             "<b>Web interface</b> (React 18 + Vite): profile, plan, time machine, stocks, devil's advocate.",
@@ -278,7 +190,7 @@ AWS_SERVICES = [
 ]
 AWS = {
     "title": "WealthPilot on AWS",
-    "subtitle": "Region us-east-1 (US East, N. Virginia). UML deployment view of the live demo.",
+    "subtitle": "Region us-east-1 (US East, N. Virginia). The services behind the live demo.",
     "notes": [
         ("Security", "CloudFront reads the private site bucket through origin access control. The function URL is "
                      "public behind CloudFront, but every personal endpoint needs a signed session; passwords are "
@@ -308,7 +220,7 @@ def _md_text(s: str) -> str:
 def solution_md() -> str:
     out = [f"# {SOLUTION['title']}", "", f"*{SOLUTION['subtitle']}* {DISCLAIMER}",
            "", "PDF one-pager: [WealthPilot_Solution_Architecture.pdf](architecture/WealthPilot_Solution_Architecture.pdf)",
-           "", "![Solution architecture, UML](architecture/solution-diagram.png)", "",
+           "", "![Solution architecture](architecture/solution-diagram.png)", "",
            "<details><summary>Mermaid source of this diagram (validated: parses, no label cut)</summary>", "",
            "```mermaid", SOLUTION_DIAGRAM.strip(), "```", "", "</details>", ""]
     for title, items in SOLUTION["cards"]:
@@ -321,7 +233,7 @@ def solution_md() -> str:
 def aws_md() -> str:
     out = [f"# {AWS['title']}", "", f"*{AWS['subtitle']}* {DISCLAIMER}",
            "", "PDF one-pager: [WealthPilot_AWS_Architecture.pdf](architecture/WealthPilot_AWS_Architecture.pdf)",
-           "", "Live demo: https://d3pmr84q14pg9z.cloudfront.net/", "", "![AWS architecture, UML](architecture/aws-diagram.png)", "",
+           "", "Live demo: https://d3pmr84q14pg9z.cloudfront.net/", "", "![AWS architecture](architecture/aws-diagram.png)", "",
            "<details><summary>Mermaid source of this diagram (validated: parses, no label cut)</summary>", "",
            "```mermaid", AWS_DIAGRAM.strip(), "```", "", "</details>", "",
            "## Services", "", "| AWS service | Role in WealthPilot | Why |", "|---|---|---|"]
@@ -379,8 +291,8 @@ def _page(title, subtitle, tag, diagram, caption, body, footer, height="4.6in") 
 def solution_html() -> str:
     cards = "".join(f'<div class="card"><h2>{t}</h2>' + "".join(f"<p>{i}</p>" for i in items) + "</div>"
                     for t, items in SOLUTION["cards"])
-    caption = ("UML component view. Dashed arrow: depends on; filled diamond: composition; solid arrow: writes. "
-               "Grouping boxes: agent layer, decision engine, storage.")
+    caption = ("Solid arrows: requests and data. Dashed arrows: tool calls, model prompts, checks. "
+               "1-2-3: the order the orchestrator runs the agents for one question.")
     footer = f"<p>{SOLUTION['grounded']}</p><p><b>{DISCLAIMER}</b> Live demo: d3pmr84q14pg9z.cloudfront.net</p>"
     return _page(SOLUTION["title"], SOLUTION["subtitle"], "", SOLUTION_DIAGRAM, caption,
                  f'<div class="grid">{cards}</div>', footer, height="4.9in")
@@ -390,8 +302,8 @@ def aws_html() -> str:
     rows = "".join(f"<tr><td>{html.escape(a)}</td><td>{html.escape(b)}</td><td>{html.escape(c)}</td></tr>"
                    for a, b, c in AWS_SERVICES)
     notes = "".join(f"<div><h2>{t}</h2><p>{html.escape(x)}</p></div>" for t, x in AWS["notes"])
-    caption = ("UML deployment view: nodes with their stereotype, artifacts deployed on them, and communication "
-               "paths labelled with the protocol or the data exchanged. The frame is the AWS Region us-east-1.")
+    caption = ("Everything inside the frame runs in the AWS Region us-east-1. Solid arrows: requests and data. "
+               "Dashed arrows: logs, permissions, deployment.")
     body = (f"<table><thead><tr><th>AWS service</th><th>Role in WealthPilot</th><th>Why this choice</th></tr></thead>"
             f"<tbody>{rows}</tbody></table><div class=\"notes\">{notes}</div>")
     footer = (f"<p>{AWS['grounded']}</p><p><b>{DISCLAIMER}</b> Live demo: d3pmr84q14pg9z.cloudfront.net</p>"

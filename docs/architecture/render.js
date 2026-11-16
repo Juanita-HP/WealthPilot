@@ -27,6 +27,27 @@ function labelProblems(root) {
       if (b.width && (b.left < a.left - 1 || b.right > a.right + 1)) problems.push('outside box: ' + t.textContent.slice(0, 40));
     });
   });
+  root.querySelectorAll('g.cluster').forEach(c => {
+    const frame = c.querySelector('rect');
+    if (!frame) return;
+    const a = frame.getBoundingClientRect();
+    // frame titles are SVG text or HTML (.cluster-label): measure the text itself, line by line
+    const title = [...c.querySelectorAll('text')].map(t => t.getBoundingClientRect()).filter(b => b.width);
+    const label = c.querySelector('.cluster-label');
+    if (label && !title.length) {
+      const range = document.createRange(); range.selectNodeContents(label);
+      title.push(...[...range.getClientRects()].filter(b => b.width));
+    }
+    title.forEach(b => { if (b.left < a.left - 1 || b.right > a.right + 1) problems.push('frame title outside its frame'); });
+    // the title must not run over a box inside its frame (a title that wraps onto two lines does)
+    const bottom = Math.max(...title.map(b => b.bottom), -Infinity);
+    root.querySelectorAll('g.node').forEach(n => {
+      const nb = n.getBoundingClientRect();
+      const inside = nb.left >= a.left && nb.right <= a.right && nb.top >= a.top && nb.bottom <= a.bottom;
+      if (inside && title.length && nb.top < bottom - 1 && nb.left < Math.max(...title.map(b => b.right)) &&
+          nb.right > Math.min(...title.map(b => b.left))) problems.push('frame title over a box: ' + c.textContent.trim().slice(0, 40));
+    });
+  });
   root.querySelectorAll('foreignObject').forEach(f => {
     const text = f.textContent.trim();
     if (!text) return;

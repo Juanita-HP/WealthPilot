@@ -1,109 +1,60 @@
 # WealthPilot · Solution architecture
 
-*Explainable, agentic investment simulation. UML component diagram.* Educational simulation: fictitious allocations, no real trades, not personalized financial advice.
+*Explainable, agentic investment simulation: how the parts fit together.* Educational simulation: fictitious allocations, no real trades, not personalized financial advice.
 
 PDF one-pager: [WealthPilot_Solution_Architecture.pdf](architecture/WealthPilot_Solution_Architecture.pdf)
 
-![Solution architecture, UML](architecture/solution-diagram.png)
+![Solution architecture](architecture/solution-diagram.png)
 
 <details><summary>Mermaid source of this diagram (validated: parses, no label cut)</summary>
 
 ```mermaid
 %%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"fontFamily": "Inter, Helvetica, Arial, sans-serif", "fontSize": "14px", "primaryColor": "#fdf8ee", "primaryBorderColor": "#b8935a", "primaryTextColor": "#172025", "lineColor": "#8a8f91", "textColor": "#172025", "edgeLabelBackground": "#ffffff", "clusterBkg": "transparent", "clusterBorder": "#b8935a", "titleColor": "#8a6d3b"}}}%%
-classDiagram
-    direction LR
-    class Web["Web interface"] {
-        <<component>>
-        React 18 + Vite
-        Profile, plan, time machine
-        Stocks, devil's advocate
-    }
-    class API["API service"] {
-        <<component>>
-        FastAPI
-        Signed sessions
-        Input validation
-    }
-    namespace Agent_layer {
-        class Orchestrator["Agent orchestrator"] {
-            <<component>>
-            Advisor, then advocate
-            Verifier, one revision
-        }
-        class Advisor["Advisor"] {
-            <<agent>>
-            LLM with tool calls
-            Answer cites receipts
-        }
-        class Critic["Devil's advocate"] {
-            <<agent>>
-            LLM with review tools
-            Challenge and counterpoint
-        }
-        class Verifier["Verifier"] {
-            <<component>>
-            Deterministic code
-            Each number vs receipt
-            Blocks trade directives
-        }
-        class Ledger["Receipt ledger"] {
-            <<component>>
-            Receipts R1, R2, ...
-        }
-    }
-    namespace Decision_engine {
-        class Engine["Decision engine"] {
-            <<component>>
-            Profile, goals, allocation
-            Risk map and metrics
-            Time machine, scenarios
-            Advocate rules, liquidity
-            News: facts vs opinions
-        }
-        class Models["Forecast models"] {
-            <<component>>
-            Inflation, crypto and gold
-            Market timing
-            Walk-forward validated
-        }
-    }
-    namespace Storage {
-        class Data["Market and macro data"] {
-            <<datastore>>
-            Prices in CAD
-            Publication lags
-        }
-        class Stores["Accounts and traces"] {
-            <<datastore>>
-            Profiles, audit trail
-        }
-    }
-    class Providers["Public data sources"] {
-        <<external>>
-        Yahoo Finance
-        Bank of Canada, StatCan
-        FRED, official feeds
-    }
-    class LLM["LLM service"] {
-        <<external>>
-        Amazon Bedrock
-    }
+flowchart LR
+    USER(["Investor"])
+    subgraph UI["Interface"]
+        WEB["Web interface<br/>React 18 + Vite"]
+    end
+    API["API service<br/>FastAPI<br/>signed sessions, validation"]
+    subgraph AG["Agent layer"]
+        ORCH["Orchestrator<br/>fixed order, one revision"]
+        ADV["Advisor<br/>LLM + tool calls"]
+        DEV["Devil's advocate<br/>LLM + review tools"]
+        VER["Verifier<br/>deterministic code"]
+        LED["Receipt ledger<br/>R1, R2, ..."]
+    end
+    subgraph ENG["Decision engine (Python)"]
+        PROF["Profile, goals, allocation<br/>risk map, time machine"]
+        RULES["Advocate rules, liquidity<br/>news: facts vs opinions"]
+        MOD["Forecast models<br/>walk-forward tested"]
+    end
+    subgraph ST["Storage"]
+        DATA[("Market and macro data<br/>prices in CAD")]
+        ACC[("Accounts and<br/>audit trail")]
+    end
+    SRC["Public sources<br/>Yahoo Finance<br/>Bank of Canada, StatCan<br/>FRED, official feeds"]
+    LLM["Amazon Bedrock™<br/>Claude Haiku 4.5"]
 
-    Web ..> API : REST JSON
-    API ..> Engine : plan, scores, reviews
-    API ..> Orchestrator : questions
-    API ..> Stores : profiles, traces
-    Orchestrator *-- Advisor
-    Orchestrator *-- Critic
-    Orchestrator *-- Verifier
-    Advisor ..> Engine : tool calls
-    Critic ..> Engine : review tools
-    Orchestrator ..> LLM : agent prompts
-    Engine --> Ledger : receipts
-    Verifier ..> Ledger : checks
-    Engine ..> Models : forecasts
-    Engine ..> Data : reads
-    Data ..> Providers : sourced from
+    USER --> WEB
+    WEB -->|"REST JSON"| API
+    API -->|"plan, scores, reviews"| PROF
+    API -->|"questions"| ORCH
+    API --> ACC
+    ORCH -->|"1 draft"| ADV
+    ORCH -->|"2 challenge"| DEV
+    ORCH -->|"3 check"| VER
+    ADV -.->|"tool calls"| PROF
+    DEV -.->|"review tools"| RULES
+    ADV -.->|"prompts"| LLM
+    DEV -.->|"prompts"| LLM
+    PROF -->|"receipts"| LED
+    PROF --> MOD
+    VER -.->|"compares"| LED
+    MOD --> DATA
+    SRC -->|"ingested"| DATA
+
+    classDef ext fill:#ffffff,stroke:#8a8f91,stroke-dasharray:4 3,color:#172025
+    class SRC,LLM,USER ext
 ```
 
 </details>

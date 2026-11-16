@@ -64,8 +64,8 @@ The [data report](docs/Data_Report.pdf) documents source selection, preprocessin
 | **[Live prototype](https://d3pmr84q14pg9z.cloudfront.net/)** | Product experience and demo personas |
 | **[Project one-pager](docs/One_pager_wealthpilot.png)** | Visual overview of the problem, solution and approach |
 | **[Data report](docs/Data_Report.pdf)** | Sources, EDA, methodology and limitations |
-| **[Solution architecture one-pager](docs/architecture/WealthPilot_Solution_Architecture.pdf)** ([web version](docs/SOLUTION_ARCHITECTURE.md)) | UML component diagram: interface, API, agents, decision engine, data |
-| **[AWS architecture one-pager](docs/architecture/WealthPilot_AWS_Architecture.pdf)** ([web version](docs/AWS_ARCHITECTURE.md)) | UML deployment diagram: Amazon CloudFront, Amazon S3, AWS Lambda, Amazon Bedrock, Amazon DynamoDB, Amazon SageMaker AI |
+| **[Solution architecture one-pager](docs/architecture/WealthPilot_Solution_Architecture.pdf)** ([web version](docs/SOLUTION_ARCHITECTURE.md)) | Architecture diagram: interface, API, agents, decision engine, data |
+| **[AWS architecture one-pager](docs/architecture/WealthPilot_AWS_Architecture.pdf)** ([web version](docs/AWS_ARCHITECTURE.md)) | AWS diagram: Amazon CloudFront™, Amazon S3™, AWS Lambda™, Amazon Bedrock™, Amazon DynamoDB™, Amazon SageMaker AI™ |
 | [Technical architecture](infra/architecture.md) | Agent workflow, validation and design choices |
 | [Developer guide](docs/technical/DEVELOPMENT.md) | Setup, commands, code map and deployment details |
 

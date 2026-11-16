@@ -29,84 +29,46 @@ footer { margin-top: 7px; border-top: 1px solid #e5e2dc; padding-top: 4px; color
 footer p { margin: 0 0 2px; }
 </style></head><body style="--dh: 3.9in">
 <header><div><div class="brand"><div class="logo"><i></i><i></i><i></i></div><h1>WealthPilot on AWS</h1></div>
-<div class="sub">Region us-east-1 (US East, N. Virginia). UML deployment view of the live demo.</div></div><div class="tag">PolyFinances Datathon 2026<br>AlphaForge AI · National Bank × AWS</div></header>
+<div class="sub">Region us-east-1 (US East, N. Virginia). The services behind the live demo.</div></div><div class="tag">PolyFinances Datathon 2026<br>AlphaForge AI · National Bank × AWS</div></header>
 <div class="diagram"><pre class="mermaid">%%{init: {&quot;theme&quot;: &quot;base&quot;, &quot;htmlLabels&quot;: false, &quot;themeVariables&quot;: {&quot;fontFamily&quot;: &quot;Inter, Helvetica, Arial, sans-serif&quot;, &quot;fontSize&quot;: &quot;14px&quot;, &quot;primaryColor&quot;: &quot;#fdf8ee&quot;, &quot;primaryBorderColor&quot;: &quot;#b8935a&quot;, &quot;primaryTextColor&quot;: &quot;#172025&quot;, &quot;lineColor&quot;: &quot;#8a8f91&quot;, &quot;textColor&quot;: &quot;#172025&quot;, &quot;edgeLabelBackground&quot;: &quot;#ffffff&quot;, &quot;clusterBkg&quot;: &quot;transparent&quot;, &quot;clusterBorder&quot;: &quot;#b8935a&quot;, &quot;titleColor&quot;: &quot;#8a6d3b&quot;}}}%%
-classDiagram
-    direction TB
-    class Browser[&quot;Investor browser&quot;] {
-        &lt;&lt;device&gt;&gt;
-    }
-    namespace AWS_Cloud_us_east_1 {
-        class CloudFront[&quot;Amazon CloudFront&quot;] {
-            &lt;&lt;edge service&gt;&gt;
-            HTTPS distribution
-            /api/* to AWS Lambda
-            Other paths to Amazon S3
-        }
-        class Site[&quot;Amazon S3 website bucket&quot;] {
-            &lt;&lt;storage&gt;&gt;
-            artifact: React build
-            Private, origin access control
-        }
-        class ApiFn[&quot;AWS Lambda API function&quot;] {
-            &lt;&lt;executionEnvironment&gt;&gt;
-            Python 3.13, function URL
-            artifact: FastAPI app
-            Tools, agents, verifier
-        }
-        class Bedrock[&quot;Amazon Bedrock&quot;] {
-            &lt;&lt;AI service&gt;&gt;
-            Converse API
-            Claude Haiku 4.5
-            Amazon Nova 2 Lite fallback
-        }
-        class Users[&quot;Amazon DynamoDB users&quot;] {
-            &lt;&lt;table&gt;&gt;
-            Accounts, profiles
-        }
-        class Traces[&quot;Amazon DynamoDB traces&quot;] {
-            &lt;&lt;table&gt;&gt;
-            Agent turns, receipts
-        }
-        class DataBucket[&quot;Amazon S3 data bucket&quot;] {
-            &lt;&lt;storage&gt;&gt;
-            Market and macro data
-            Published models
-            Training outputs
-        }
-        class Logs[&quot;Amazon CloudWatch&quot;] {
-            &lt;&lt;monitoring&gt;&gt;
-            Logs
-        }
-        class Scheduler[&quot;Amazon EventBridge Scheduler&quot;] {
-            &lt;&lt;scheduler&gt;&gt;
-            Monthly
-        }
-        class Launcher[&quot;AWS Lambda training launcher&quot;] {
-            &lt;&lt;executionEnvironment&gt;&gt;
-            CreateTrainingJob
-        }
-        class Training[&quot;Amazon SageMaker AI training job&quot;] {
-            &lt;&lt;executionEnvironment&gt;&gt;
-            scikit-learn container
-            ml.m5.large
-            Candidate models
-        }
-    }
+flowchart TB
+    USER([&quot;Investor browser&quot;])
+    subgraph REG[&quot;AWS Cloud · Region us-east-1&quot;]
+        CF[&quot;Amazon CloudFront™&lt;br/&gt;HTTPS distribution&quot;]
+        S3W[&quot;Amazon S3™&lt;br/&gt;private website bucket&lt;br/&gt;React build&quot;]
+        API[&quot;AWS Lambda™&lt;br/&gt;API function: FastAPI,&lt;br/&gt;tools, agents, verifier&quot;]
+        BR[&quot;Amazon Bedrock™&lt;br/&gt;Claude Haiku 4.5&lt;br/&gt;Amazon Nova 2 Lite fallback&quot;]
+        DDBU[(&quot;Amazon DynamoDB™&lt;br/&gt;users table&quot;)]
+        DDBT[(&quot;Amazon DynamoDB™&lt;br/&gt;traces table&quot;)]
+        S3D[(&quot;Amazon S3™&lt;br/&gt;data bucket: data,&lt;br/&gt;models, training&quot;)]
+        CW[&quot;Amazon CloudWatch™&lt;br/&gt;logs&quot;]
+        subgraph TRAIN[&quot;Monthly model training&quot;]
+            EB[&quot;Amazon EventBridge&lt;br/&gt;Scheduler™&quot;]
+            LL[&quot;AWS Lambda™&lt;br/&gt;training launcher&quot;]
+            SM[&quot;Amazon SageMaker AI™&lt;br/&gt;training job&quot;]
+        end
+        IAM[&quot;AWS IAM™&lt;br/&gt;least-privilege roles&quot;]
+    end
+    OPS[&quot;AWS CloudShell™ and&lt;br/&gt;AWS CloudFormation™&lt;br/&gt;deploy, no access keys&quot;]
 
-    Browser --&gt; CloudFront : HTTPS
-    CloudFront --&gt; Site : pages
-    CloudFront --&gt; ApiFn : HTTPS /api
-    ApiFn --&gt; Users : read, write
-    ApiFn --&gt; Traces : write
-    ApiFn --&gt; DataBucket : read
-    ApiFn --&gt; Bedrock : Converse
-    ApiFn ..&gt; Logs : logs
-    Scheduler --&gt; Launcher : monthly
-    Launcher --&gt; Training : starts
-    Training --&gt; DataBucket : reads data, writes candidates
+    USER --&gt; CF
+    CF --&gt;|&quot;pages&quot;| S3W
+    CF --&gt;|&quot;/api/*&quot;| API
+    API --&gt;|&quot;Converse API&quot;| BR
+    API &lt;--&gt;|&quot;accounts&quot;| DDBU
+    API --&gt;|&quot;receipts&quot;| DDBT
+    API --&gt;|&quot;data, models&quot;| S3D
+    API -.-&gt;|&quot;logs&quot;| CW
+    EB --&gt;|&quot;1st of month&quot;| LL
+    LL --&gt;|&quot;starts&quot;| SM
+    SM --&gt;|&quot;candidates&quot;| S3D
+    IAM -.-&gt;|&quot;roles&quot;| API
+    OPS -.-&gt;|&quot;stacks&quot;| CF
+
+    classDef ext fill:#ffffff,stroke:#8a8f91,stroke-dasharray:4 3,color:#172025
+    class USER,OPS ext
 </pre></div>
-<div class="cap">UML deployment view: nodes with their stereotype, artifacts deployed on them, and communication paths labelled with the protocol or the data exchanged. The frame is the AWS Region us-east-1.</div>
+<div class="cap">Everything inside the frame runs in the AWS Region us-east-1. Solid arrows: requests and data. Dashed arrows: logs, permissions, deployment.</div>
 <table><thead><tr><th>AWS service</th><th>Role in WealthPilot</th><th>Why this choice</th></tr></thead><tbody><tr><td>Amazon CloudFront™</td><td>HTTPS entry point: serves the interface, routes /api/* to AWS Lambda</td><td>One address for site and API, no CORS</td></tr><tr><td>Amazon Simple Storage Service (Amazon S3™)</td><td>Private website bucket; data bucket with market and macro data, published models, training outputs</td><td>Private and versioned; read through origin access control</td></tr><tr><td>AWS Lambda™</td><td>API function (FastAPI via Mangum, Python 3.13, function URL); training launcher</td><td>Pays per request, scales to zero</td></tr><tr><td>Amazon Bedrock™</td><td>Advisor and Devil&#x27;s advocate through the Converse API: Anthropic Claude Haiku 4.5, Amazon Nova 2 Lite as fallback</td><td>Managed models inside the AWS boundary, no model API keys</td></tr><tr><td>Amazon DynamoDB™</td><td>Users table (accounts, profiles, token key); traces table (agent turns, receipts, verification)</td><td>Persists across Lambda containers; audit trail</td></tr><tr><td>Amazon SageMaker AI™</td><td>Monthly training jobs (scikit-learn container, ml.m5.large) writing candidate models</td><td>Each model traceable to its commit, data hash and metrics</td></tr><tr><td>Amazon EventBridge Scheduler™</td><td>Starts the training launcher on the 1st of each month</td><td>Serverless schedule</td></tr><tr><td>Amazon CloudWatch™</td><td>Logs of the Lambda functions and training jobs</td><td>Operations and debugging</td></tr><tr><td>AWS Identity and Access Management (IAM)™</td><td>One role per function and for SageMaker, least privilege</td><td>No access keys anywhere</td></tr><tr><td>AWS CloudFormation™ with AWS SAM, AWS CloudShell™</td><td>Stacks wealthpilot-web and wealthpilot-training, deployed from CloudShell</td><td>Reproducible; credentials never leave AWS</td></tr></tbody></table><div class="notes"><div><h2>Security</h2><p>CloudFront reads the private site bucket through origin access control. The function URL is public behind CloudFront, but every personal endpoint needs a signed session; passwords are stored as salted PBKDF2 hashes. No access key is stored in code or configuration.</p></div><div><h2>Model governance</h2><p>SageMaker writes candidates only. scripts/promote_models.sh shows live vs candidate results and publishes after a human yes. No always-on endpoint: the API reads the published model files.</p></div><div><h2>Cost</h2><p>Pay per request (CloudFront, Lambda, DynamoDB on demand, Bedrock tokens). A training job costs about 1 to 2 US cents. Idle cost is close to zero.</p></div></div>
 <footer><p>Grounded in: infra/hosting.yaml, infra/training.yaml, wealthpilot/aws/ (api_handler, storage, training), wealthpilot/agents/llm.py, scripts/deploy_aws.sh, train_aws.sh, promote_models.sh.</p><p><b>Educational simulation: fictitious allocations, no real trades, not personalized financial advice.</b> Live demo: d3pmr84q14pg9z.cloudfront.net</p><p>Amazon Web Services, AWS, Amazon CloudFront, Amazon S3, AWS Lambda, Amazon Bedrock, Amazon DynamoDB, Amazon SageMaker AI, Amazon EventBridge, Amazon CloudWatch, AWS Identity and Access Management, AWS CloudFormation, AWS CloudShell and Amazon Nova are trademarks of Amazon.com, Inc. or its affiliates. Claude is a trademark of Anthropic, PBC. Names are used to identify services; no endorsement is implied.</p></footer>
 </body></html>

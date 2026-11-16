@@ -1,91 +1,53 @@
 # WealthPilot on AWS
 
-*Region us-east-1 (US East, N. Virginia). UML deployment view of the live demo.* Educational simulation: fictitious allocations, no real trades, not personalized financial advice.
+*Region us-east-1 (US East, N. Virginia). The services behind the live demo.* Educational simulation: fictitious allocations, no real trades, not personalized financial advice.
 
 PDF one-pager: [WealthPilot_AWS_Architecture.pdf](architecture/WealthPilot_AWS_Architecture.pdf)
 
 Live demo: https://d3pmr84q14pg9z.cloudfront.net/
 
-![AWS architecture, UML](architecture/aws-diagram.png)
+![AWS architecture](architecture/aws-diagram.png)
 
 <details><summary>Mermaid source of this diagram (validated: parses, no label cut)</summary>
 
 ```mermaid
 %%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"fontFamily": "Inter, Helvetica, Arial, sans-serif", "fontSize": "14px", "primaryColor": "#fdf8ee", "primaryBorderColor": "#b8935a", "primaryTextColor": "#172025", "lineColor": "#8a8f91", "textColor": "#172025", "edgeLabelBackground": "#ffffff", "clusterBkg": "transparent", "clusterBorder": "#b8935a", "titleColor": "#8a6d3b"}}}%%
-classDiagram
-    direction TB
-    class Browser["Investor browser"] {
-        <<device>>
-    }
-    namespace AWS_Cloud_us_east_1 {
-        class CloudFront["Amazon CloudFront"] {
-            <<edge service>>
-            HTTPS distribution
-            /api/* to AWS Lambda
-            Other paths to Amazon S3
-        }
-        class Site["Amazon S3 website bucket"] {
-            <<storage>>
-            artifact: React build
-            Private, origin access control
-        }
-        class ApiFn["AWS Lambda API function"] {
-            <<executionEnvironment>>
-            Python 3.13, function URL
-            artifact: FastAPI app
-            Tools, agents, verifier
-        }
-        class Bedrock["Amazon Bedrock"] {
-            <<AI service>>
-            Converse API
-            Claude Haiku 4.5
-            Amazon Nova 2 Lite fallback
-        }
-        class Users["Amazon DynamoDB users"] {
-            <<table>>
-            Accounts, profiles
-        }
-        class Traces["Amazon DynamoDB traces"] {
-            <<table>>
-            Agent turns, receipts
-        }
-        class DataBucket["Amazon S3 data bucket"] {
-            <<storage>>
-            Market and macro data
-            Published models
-            Training outputs
-        }
-        class Logs["Amazon CloudWatch"] {
-            <<monitoring>>
-            Logs
-        }
-        class Scheduler["Amazon EventBridge Scheduler"] {
-            <<scheduler>>
-            Monthly
-        }
-        class Launcher["AWS Lambda training launcher"] {
-            <<executionEnvironment>>
-            CreateTrainingJob
-        }
-        class Training["Amazon SageMaker AI training job"] {
-            <<executionEnvironment>>
-            scikit-learn container
-            ml.m5.large
-            Candidate models
-        }
-    }
+flowchart TB
+    USER(["Investor browser"])
+    subgraph REG["AWS Cloud · Region us-east-1"]
+        CF["Amazon CloudFront™<br/>HTTPS distribution"]
+        S3W["Amazon S3™<br/>private website bucket<br/>React build"]
+        API["AWS Lambda™<br/>API function: FastAPI,<br/>tools, agents, verifier"]
+        BR["Amazon Bedrock™<br/>Claude Haiku 4.5<br/>Amazon Nova 2 Lite fallback"]
+        DDBU[("Amazon DynamoDB™<br/>users table")]
+        DDBT[("Amazon DynamoDB™<br/>traces table")]
+        S3D[("Amazon S3™<br/>data bucket: data,<br/>models, training")]
+        CW["Amazon CloudWatch™<br/>logs"]
+        subgraph TRAIN["Monthly model training"]
+            EB["Amazon EventBridge<br/>Scheduler™"]
+            LL["AWS Lambda™<br/>training launcher"]
+            SM["Amazon SageMaker AI™<br/>training job"]
+        end
+        IAM["AWS IAM™<br/>least-privilege roles"]
+    end
+    OPS["AWS CloudShell™ and<br/>AWS CloudFormation™<br/>deploy, no access keys"]
 
-    Browser --> CloudFront : HTTPS
-    CloudFront --> Site : pages
-    CloudFront --> ApiFn : HTTPS /api
-    ApiFn --> Users : read, write
-    ApiFn --> Traces : write
-    ApiFn --> DataBucket : read
-    ApiFn --> Bedrock : Converse
-    ApiFn ..> Logs : logs
-    Scheduler --> Launcher : monthly
-    Launcher --> Training : starts
-    Training --> DataBucket : reads data, writes candidates
+    USER --> CF
+    CF -->|"pages"| S3W
+    CF -->|"/api/*"| API
+    API -->|"Converse API"| BR
+    API <-->|"accounts"| DDBU
+    API -->|"receipts"| DDBT
+    API -->|"data, models"| S3D
+    API -.->|"logs"| CW
+    EB -->|"1st of month"| LL
+    LL -->|"starts"| SM
+    SM -->|"candidates"| S3D
+    IAM -.->|"roles"| API
+    OPS -.->|"stacks"| CF
+
+    classDef ext fill:#ffffff,stroke:#8a8f91,stroke-dasharray:4 3,color:#172025
+    class USER,OPS ext
 ```
 
 </details>
