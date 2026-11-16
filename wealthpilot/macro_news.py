@@ -648,5 +648,5 @@ def impact(weights: dict[str, float], universe: pd.DataFrame, items: list[dict],
     read = sum(it["text_status"] == "ok" for it in items)
     return {"items": rows, "n_collected": len(items), "n_text_read": read,
             "sources": sorted({it["publisher"] for it in items}),
-            "rule": "News explain what moves your money; they never change the recommended allocation.",
+            "rule": "News explain what moves your money; they never change the simulated allocation.",
             "notes": [f"Full text read for {read} of {len(items)} official releases collected."]}

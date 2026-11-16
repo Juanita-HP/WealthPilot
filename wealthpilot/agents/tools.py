@@ -302,7 +302,7 @@ TOOLS = [
     Tool("risk_map", "Six kinds of risk (market, credit, liquidity, currency, concentration, inflation) for an "
                      "allocation (empty list = current one), each with a level, the number behind it and a reason.",
          _obj({"weights": WEIGHTS}), t_risk_map, frozenset({"advisor", "advocate"})),
-    Tool("what_would_change", "Conditions that would change the recommendation: profile answers one step away from "
+    Tool("what_would_change", "Conditions that would change the simulated allocation: profile answers one step away from "
                               "another level, horizon thresholds, higher inflation, lower returns.",
          _obj({"goals_list": GOALS}), t_what_would_change, frozenset({"advisor", "advocate"})),
     Tool("propose_allocation", "Build the policy allocation for the current profile, with a reason for every weight.",

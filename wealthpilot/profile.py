@@ -388,7 +388,7 @@ def constraints_for(level: int, answers: dict[str, str], preferences: Preference
 def with_level(profile: "InvestorProfile", level: int, reason: str) -> "InvestorProfile":
     """Same investor, a lower (never higher) risk level: used per goal and when the investor picks a safer level."""
     if level > profile.level:
-        raise ValueError(f"level {level} is above the recommended level {profile.level}")
+        raise ValueError(f"level {level} is above the rules-based level {profile.level}")
     from dataclasses import replace
     constraints, _ = constraints_for(level, profile.answers, profile.preferences)
     return replace(profile, level=level, level_name=LEVELS[level].name, constraints=constraints,
@@ -400,11 +400,11 @@ def choose_level(profile: "InvestorProfile", requested: int) -> tuple["InvestorP
     """Investor override, as robo-advisors do it: a MORE conservative level is always allowed,
     a more aggressive one is not (the recommendation already reflects capacity and tolerance)."""
     if requested == profile.level:
-        return profile, "Recommended level kept."
+        return profile, "Rules-based level kept."
     if requested < profile.level:
         return with_level(profile, requested, f"Investor chose level {requested} ({LEVELS[requested].name}), "
-                                              f"more conservative than the recommended {profile.level}."), "Allowed."
-    return profile, (f"Level {requested} ({LEVELS[requested].name}) is above the recommended level {profile.level}: "
+                                              f"more conservative than the rules-based level {profile.level}."), "Allowed."
+    return profile, (f"Level {requested} ({LEVELS[requested].name}) is above the rules-based level {profile.level}: "
                      "it would exceed the investor's capacity or tolerance, so it is not applied.")
 
 

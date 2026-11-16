@@ -1,126 +1,84 @@
-# WealthPilot — AWS Architecture
+# WealthPilot on AWS
 
-**PolyFinances Datathon 2026 · Architecture map · Educational investment simulation**
+*Region us-east-1 (US East, N. Virginia). The services behind the live demo.* Educational simulation: fictitious allocations, no real trades, not personalized financial advice.
 
-**Live application:** https://d3pmr84q14pg9z.cloudfront.net/  
-**Primary AWS region:** `us-east-1`  
-**Scope:** Hosting, API, explainable AI, data storage, auditability and model training.
+PDF one-pager: [WealthPilot_AWS_Architecture.pdf](architecture/WealthPilot_AWS_Architecture.pdf)
 
-## 1. AWS service map
+Live demo: https://d3pmr84q14pg9z.cloudfront.net/
 
-The diagram shows **where each AWS service fits in the user-facing application**. The Advisor, Devil's Advocate and deterministic Verifier are **application components**; Bedrock provides models, while the orchestration and verification code execute in Lambda.
+![AWS architecture](architecture/aws-diagram.png)
+
+<details><summary>Mermaid source of this diagram (validated: parses, no label cut)</summary>
 
 ```mermaid
+%%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"fontFamily": "Inter, Helvetica, Arial, sans-serif", "fontSize": "14px", "primaryColor": "#fdf8ee", "primaryBorderColor": "#b8935a", "primaryTextColor": "#172025", "lineColor": "#8a8f91", "textColor": "#172025", "edgeLabelBackground": "#ffffff", "clusterBkg": "transparent", "clusterBorder": "#b8935a", "titleColor": "#8a6d3b"}}}%%
 flowchart TB
-    USER["Investor<br/>Web browser"]
-
-    subgraph AWS["WEALTHPILOT ON AWS · us-east-1"]
-      CF["Amazon CloudFront<br/>HTTPS entry point"]
-      SITE["Amazon S3<br/>Private website bucket<br/>React + Vite build"]
-      API["AWS Lambda · Function URL<br/>FastAPI + Mangum<br/>Financial tools + agent orchestration<br/>Deterministic verifier"]
-      DATA["Amazon S3<br/>Market data + FX + macro series<br/>Published model artifacts"]
-      USERS["Amazon DynamoDB<br/>Accounts and investor profiles"]
-      BEDROCK["Amazon Bedrock<br/>Advisor + Devil's Advocate<br/>Claude Haiku 4.5 · Nova fallback"]
-      AUDIT["Amazon DynamoDB<br/>Session state + agent traces<br/>Calculation receipts"]
-      LOG["Amazon CloudWatch<br/>Lambda and training logs"]
-
-      CF -->|"Static web pages"| SITE
-      CF -->|"/api/* HTTPS"| API
-      API -->|"Load datasets / models"| DATA
-      API <-->|"Account and profile data"| USERS
-      API -->|"Model requests"| BEDROCK
-      API -->|"Receipts and verification records"| AUDIT
-      API -.->|"Execution logs"| LOG
+    USER(["Investor browser"])
+    subgraph REG["AWS Cloud · Region us-east-1"]
+        CF["Amazon CloudFront™<br/>HTTPS distribution"]
+        S3W["Amazon S3™<br/>private website bucket<br/>React build"]
+        API["AWS Lambda™<br/>API function: FastAPI,<br/>tools, agents, verifier"]
+        BR["Amazon Bedrock™<br/>Claude Haiku 4.5<br/>Amazon Nova 2 Lite fallback"]
+        DDBU[("Amazon DynamoDB™<br/>users table")]
+        DDBT[("Amazon DynamoDB™<br/>traces table")]
+        S3D[("Amazon S3™<br/>data bucket: data,<br/>models, training")]
+        CW["Amazon CloudWatch™<br/>logs"]
+        subgraph TRAIN["Monthly model training"]
+            EB["Amazon EventBridge<br/>Scheduler™"]
+            LL["AWS Lambda™<br/>training launcher"]
+            SM["Amazon SageMaker AI™<br/>training job"]
+        end
+        IAM["AWS IAM™<br/>least-privilege roles"]
     end
+    OPS["AWS CloudShell™ and<br/>AWS CloudFormation™<br/>deploy, no access keys"]
 
-    USER -->|"HTTPS"| CF
+    USER --> CF
+    CF -->|"pages"| S3W
+    CF -->|"/api/*"| API
+    API -->|"Converse API"| BR
+    API <-->|"accounts"| DDBU
+    API -->|"receipts"| DDBT
+    API -->|"data, models"| S3D
+    API -.->|"logs"| CW
+    EB -->|"1st of month"| LL
+    LL -->|"starts"| SM
+    SM -->|"candidates"| S3D
+    IAM -.->|"roles"| API
+    OPS -.->|"stacks"| CF
 
-    classDef primary fill:#fff7e6,stroke:#c21807,color:#171717,stroke-width:2px
-    classDef storage fill:#ffffff,stroke:#d5a027,color:#171717,stroke-width:1.5px
-    classDef observer fill:#f7f7f7,stroke:#737373,color:#171717
-    class CF,API,BEDROCK primary
-    class SITE,DATA,USERS,AUDIT storage
-    class LOG observer
+    classDef ext fill:#ffffff,stroke:#8a8f91,stroke-dasharray:4 3,color:#172025
+    class USER,OPS ext
 ```
 
-### How one investor request is handled
+</details>
 
-1. **CloudFront** serves the React interface from a **private S3 website bucket**. Requests to `/api/*` go to a Lambda Function URL, which hosts the **FastAPI** backend through **Mangum**.
-2. **Lambda** retrieves investor context from **DynamoDB**, reads the necessary data and published model files from **S3**, and runs Python-based financial calculations.
-3. **Amazon Bedrock** powers the **Advisor** and **Devil's Advocate**. They interpret evidence and challenge assumptions; the Python **Verifier** checks numerical statements against tool-generated calculation receipts.
-4. **DynamoDB** stores session/audit records, including receipts and verification results. **CloudWatch** provides operational logs.
+## Services
 
-**Important distinction:** the Verifier is deterministic **Python code in Lambda**, not a separate AWS service or an LLM that approves its own answers.
+| AWS service | Role in WealthPilot | Why |
+|---|---|---|
+| **Amazon CloudFront™** | HTTPS entry point: serves the interface, routes /api/* to AWS Lambda | One address for site and API, no CORS |
+| **Amazon Simple Storage Service (Amazon S3™)** | Private website bucket; data bucket with market and macro data, published models, training outputs | Private and versioned; read through origin access control |
+| **AWS Lambda™** | API function (FastAPI via Mangum, Python 3.13, function URL); training launcher | Pays per request, scales to zero |
+| **Amazon Bedrock™** | Advisor and Devil's advocate through the Converse API: Anthropic Claude Haiku 4.5, Amazon Nova 2 Lite as fallback | Managed models inside the AWS boundary, no model API keys |
+| **Amazon DynamoDB™** | Users table (accounts, profiles, token key); traces table (agent turns, receipts, verification) | Persists across Lambda containers; audit trail |
+| **Amazon SageMaker AI™** | Monthly training jobs (scikit-learn container, ml.m5.large) writing candidate models | Each model traceable to its commit, data hash and metrics |
+| **Amazon EventBridge Scheduler™** | Starts the training launcher on the 1st of each month | Serverless schedule |
+| **Amazon CloudWatch™** | Logs of the Lambda functions and training jobs | Operations and debugging |
+| **AWS Identity and Access Management (IAM)™** | One role per function and for SageMaker, least privilege | No access keys anywhere |
+| **AWS CloudFormation™ with AWS SAM, AWS CloudShell™** | Stacks wealthpilot-web and wealthpilot-training, deployed from CloudShell | Reproducible; credentials never leave AWS |
 
-## 2. Model training and publication
+## Security
 
-The platform separates **model retraining** from **production use**. Training candidates do not automatically replace the live models.
+CloudFront reads the private site bucket through origin access control. The function URL is public behind CloudFront, but every personal endpoint needs a signed session; passwords are stored as salted PBKDF2 hashes. No access key is stored in code or configuration.
 
-```mermaid
-flowchart LR
-    SCHED["Amazon EventBridge Scheduler<br/>Monthly schedule configured"]
-    MANUAL["Manual AWS CloudShell<br/>train_aws.sh"]
-    LAUNCH["AWS Lambda<br/>Training launcher"]
-    INPUT["Amazon S3<br/>Datasets + source package"]
-    SM["Amazon SageMaker<br/>Managed training job"]
-    CAND["Amazon S3<br/>Candidate models + evaluation"]
-    CHECK{"Human review<br/>and approval"}
-    LIVE["Amazon S3<br/>Published models"]
-    API["AWS Lambda API<br/>Loads published models"]
+## Model governance
 
-    SCHED --> LAUNCH
-    MANUAL --> LAUNCH
-    INPUT --> SM
-    LAUNCH --> SM
-    SM --> CAND
-    CAND --> CHECK
-    CHECK -->|"Approved via promote_models.sh"| LIVE
-    LIVE --> API
+SageMaker writes candidates only. scripts/promote_models.sh shows live vs candidate results and publishes after a human yes. No always-on endpoint: the API reads the published model files.
 
-    classDef primary fill:#fff7e6,stroke:#c21807,color:#171717,stroke-width:2px
-    classDef storage fill:#ffffff,stroke:#d5a027,color:#171717,stroke-width:1.5px
-    class SCHED,LAUNCH,SM,API primary
-    class INPUT,CAND,LIVE storage
-```
+## Cost
 
-- **SageMaker Training Jobs** retrain the inflation, asset forecasting and market-timing models using time-aware evaluation. The jobs write **candidate** artifacts and metrics to S3.
-- **EventBridge Scheduler** is configured for a monthly trigger; the team can also start training on demand.
-- **Human approval** is required before `scripts/promote_models.sh` publishes a candidate to the live model location in S3. There is **no always-on SageMaker inference endpoint**; model artifacts are loaded by the Python API.
+Pay per request (CloudFront, Lambda, DynamoDB on demand, Bedrock tokens). A training job costs about 1 to 2 US cents. Idle cost is close to zero.
 
-## 3. AWS services and their responsibilities
+*Grounded in: infra/hosting.yaml, infra/training.yaml, wealthpilot/aws/ (api_handler, storage, training), wealthpilot/agents/llm.py, scripts/deploy_aws.sh, train_aws.sh, promote_models.sh.*
 
-| AWS service | Responsibility in WealthPilot |
-|---|---|
-| **Amazon CloudFront** | Public HTTPS distribution; routes website traffic and API requests |
-| **Amazon S3** | Private React website hosting; separate storage for financial datasets and model files |
-| **AWS Lambda** | Runs the FastAPI API, financial tools, agent workflow and deterministic verification; separate training launcher |
-| **Amazon Bedrock** | LLM inference for Advisor and Devil's Advocate; Claude Haiku 4.5 with Amazon Nova fallback |
-| **Amazon DynamoDB** | Investor accounts/profiles and separate trace/session audit data |
-| **Amazon SageMaker** | Managed training jobs and evaluated candidate models |
-| **Amazon EventBridge Scheduler** | Configured recurring model retraining trigger |
-| **AWS IAM** | Execution roles and service-to-service permissions |
-| **Amazon CloudWatch** | Operational logs for Lambda and model training |
-
-## 4. Security, governance and limitations
-
-- **Private website origin:** CloudFront reads the private S3 site bucket through **Origin Access Control**. The browser does not receive unrestricted access to the bucket.
-- **API access:** the Lambda Function URL is configured with `AuthType: NONE` and is routed through CloudFront. It is **not private by virtue of CloudFront**; protected user operations use application-level signed authentication.
-- **IAM permissions:** Lambda receives the permissions required to read S3, use the relevant DynamoDB tables and invoke Bedrock. No AWS access keys should be stored in the repository.
-- **Financial accountability:** calculated values and agent claims are checked against traceable receipts; forecasts, assumptions and historical observations remain clearly distinct.
-- **External data:** Yahoo Finance, the Bank of Canada and FRED are **data providers**, not AWS services. The Jupyter EDA report is research evidence, **not** a claim that EDA runs inside SageMaker.
-- **Scope:** WealthPilot is an educational prototype. It does **not** execute trades or provide regulated investment advice.
-
-## 5. Implementation references
-
-This map is grounded in the repository's AWS configuration and application code:
-
-- [Website infrastructure (CloudFront, S3, Lambda, DynamoDB)](../infra/hosting.yaml)
-- [Agent-oriented AWS stack](../infra/template.yaml)
-- [SageMaker training and scheduling stack](../infra/training.yaml)
-- [AWS integration notes and operational status](../infra/aws.md)
-- [API Lambda entry point](../wealthpilot/aws/api_handler.py)
-- [Agent Lambda entry point](../wealthpilot/aws/lambda_handler.py)
-- [Training launcher](../wealthpilot/aws/training.py)
-- [Deployment script](../scripts/deploy_aws.sh) · [Training script](../scripts/train_aws.sh) · [Manual model promotion](../scripts/promote_models.sh)
-
-*Evidence note:* This is an **architecture-as-configured** document. The repository's AWS notes report end-to-end checks for Bedrock, S3 and DynamoDB; this diagram itself is **not** an independent live AWS account audit.
+<sub>Amazon Web Services, AWS, Amazon CloudFront, Amazon S3, AWS Lambda, Amazon Bedrock, Amazon DynamoDB, Amazon SageMaker AI, Amazon EventBridge, Amazon CloudWatch, AWS Identity and Access Management, AWS CloudFormation, AWS CloudShell and Amazon Nova are trademarks of Amazon.com, Inc. or its affiliates. Claude is a trademark of Anthropic, PBC. Names are used to identify services; no endorsement is implied.</sub>

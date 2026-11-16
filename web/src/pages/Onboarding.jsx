@@ -296,7 +296,7 @@ export default function Onboarding({ editing, onSaved, onCancel }) {
         body: preview?.profile ? (
           <>
             <div className="analysis-grid" style={{ gridTemplateColumns: "repeat(3,minmax(0,1fr))" }}>
-              <div className="analysis-stat"><span>Recommended level</span><strong>{preview.profile.name} · {preview.profile.score_10}/10 risk</strong></div>
+              <div className="analysis-stat"><span>Level from your answers</span><strong>{preview.profile.name} · {preview.profile.score_10}/10 risk</strong></div>
               <div className="analysis-stat"><span>Risk capacity</span><strong>{Math.round(preview.profile.capacity)}/100</strong></div>
               <div className="analysis-stat"><span>Risk tolerance</span><strong>{Math.round(preview.profile.tolerance)}/100</strong></div>
             </div>
