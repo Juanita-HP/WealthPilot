@@ -1,0 +1,132 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>WealthPilot · Solution architecture</title>
+<style>
+@page { size: Letter; margin: 0.42in 0.5in; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, Helvetica, Arial, sans-serif; color: #172025; font-size: 7.6pt; line-height: 1.38; }
+header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #172025; padding-bottom: 6px; }
+.brand { display: flex; align-items: center; gap: 8px; }
+.logo { display: flex; gap: 2px; align-items: flex-end; height: 22px; }
+.logo i { display: block; width: 5px; background: #c5ad83; }
+.logo i:nth-child(1) { height: 10px; } .logo i:nth-child(2) { height: 16px; } .logo i:nth-child(3) { height: 22px; }
+h1 { font-size: 17pt; letter-spacing: -0.4px; margin: 0; }
+.sub { color: #5d666a; font-size: 8pt; margin-top: 2px; }
+.tag { font-size: 6.6pt; text-transform: uppercase; letter-spacing: 1px; color: #8a6d3b; text-align: right; }
+.diagram { margin: 8px auto 6px; text-align: center; font-size: 14px; line-height: normal; }
+.diagram svg { max-width: 100% !important; width: auto; height: auto; max-height: var(--dh); }
+.cap { text-align: center; color: #5d666a; font-size: 6.6pt; margin-bottom: 6px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 12px; }
+.card { border: 1px solid #e5e2dc; border-radius: 6px; padding: 6px 9px; background: #fffdf9; }
+.card h2 { font-size: 8.6pt; margin: 0 0 3px; color: #172025; }
+.card p { margin: 0 0 3px; }
+table { width: 100%; border-collapse: collapse; font-size: 7pt; }
+th { text-align: left; background: #172025; color: #fff; padding: 3px 6px; font-weight: 600; }
+td { border-bottom: 1px solid #e5e2dc; padding: 2.6px 6px; vertical-align: top; }
+td:first-child { font-weight: 600; width: 27%; }
+.notes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 7px; }
+.notes h2 { font-size: 8.2pt; margin: 0 0 2px; }
+.notes p { margin: 0; }
+footer { margin-top: 7px; border-top: 1px solid #e5e2dc; padding-top: 4px; color: #6b7275; font-size: 6.2pt; }
+footer p { margin: 0 0 2px; }
+</style></head><body style="--dh: 4.9in">
+<header><div><div class="brand"><div class="logo"><i></i><i></i><i></i></div><h1>WealthPilot · Solution architecture</h1></div>
+<div class="sub">Explainable, agentic investment simulation. UML component diagram.</div></div><div class="tag">PolyFinances Datathon 2026<br>AlphaForge AI · National Bank × AWS</div></header>
+<div class="diagram"><pre class="mermaid">%%{init: {&quot;theme&quot;: &quot;base&quot;, &quot;htmlLabels&quot;: false, &quot;themeVariables&quot;: {&quot;fontFamily&quot;: &quot;Inter, Helvetica, Arial, sans-serif&quot;, &quot;fontSize&quot;: &quot;14px&quot;, &quot;primaryColor&quot;: &quot;#fdf8ee&quot;, &quot;primaryBorderColor&quot;: &quot;#b8935a&quot;, &quot;primaryTextColor&quot;: &quot;#172025&quot;, &quot;lineColor&quot;: &quot;#8a8f91&quot;, &quot;textColor&quot;: &quot;#172025&quot;, &quot;edgeLabelBackground&quot;: &quot;#ffffff&quot;, &quot;clusterBkg&quot;: &quot;transparent&quot;, &quot;clusterBorder&quot;: &quot;#b8935a&quot;, &quot;titleColor&quot;: &quot;#8a6d3b&quot;}}}%%
+classDiagram
+    direction LR
+    class Web[&quot;Web interface&quot;] {
+        &lt;&lt;component&gt;&gt;
+        React 18 + Vite
+        Profile, plan, time machine
+        Stocks, devil&#x27;s advocate
+    }
+    class API[&quot;API service&quot;] {
+        &lt;&lt;component&gt;&gt;
+        FastAPI
+        Signed sessions
+        Input validation
+    }
+    namespace Agent_layer {
+        class Orchestrator[&quot;Agent orchestrator&quot;] {
+            &lt;&lt;component&gt;&gt;
+            Advisor, then advocate
+            Verifier, one revision
+        }
+        class Advisor[&quot;Advisor&quot;] {
+            &lt;&lt;agent&gt;&gt;
+            LLM with tool calls
+            Answer cites receipts
+        }
+        class Critic[&quot;Devil&#x27;s advocate&quot;] {
+            &lt;&lt;agent&gt;&gt;
+            LLM with review tools
+            Challenge and counterpoint
+        }
+        class Verifier[&quot;Verifier&quot;] {
+            &lt;&lt;component&gt;&gt;
+            Deterministic code
+            Each number vs receipt
+            Blocks trade directives
+        }
+        class Ledger[&quot;Receipt ledger&quot;] {
+            &lt;&lt;component&gt;&gt;
+            Receipts R1, R2, ...
+        }
+    }
+    namespace Decision_engine {
+        class Engine[&quot;Decision engine&quot;] {
+            &lt;&lt;component&gt;&gt;
+            Profile, goals, allocation
+            Risk map and metrics
+            Time machine, scenarios
+            Advocate rules, liquidity
+            News: facts vs opinions
+        }
+        class Models[&quot;Forecast models&quot;] {
+            &lt;&lt;component&gt;&gt;
+            Inflation, crypto and gold
+            Market timing
+            Walk-forward validated
+        }
+    }
+    namespace Storage {
+        class Data[&quot;Market and macro data&quot;] {
+            &lt;&lt;datastore&gt;&gt;
+            Prices in CAD
+            Publication lags
+        }
+        class Stores[&quot;Accounts and traces&quot;] {
+            &lt;&lt;datastore&gt;&gt;
+            Profiles, audit trail
+        }
+    }
+    class Providers[&quot;Public data sources&quot;] {
+        &lt;&lt;external&gt;&gt;
+        Yahoo Finance
+        Bank of Canada, StatCan
+        FRED, official feeds
+    }
+    class LLM[&quot;LLM service&quot;] {
+        &lt;&lt;external&gt;&gt;
+        Amazon Bedrock
+    }
+
+    Web ..&gt; API : REST JSON
+    API ..&gt; Engine : plan, scores, reviews
+    API ..&gt; Orchestrator : questions
+    API ..&gt; Stores : profiles, traces
+    Orchestrator *-- Advisor
+    Orchestrator *-- Critic
+    Orchestrator *-- Verifier
+    Advisor ..&gt; Engine : tool calls
+    Critic ..&gt; Engine : review tools
+    Orchestrator ..&gt; LLM : agent prompts
+    Engine --&gt; Ledger : receipts
+    Verifier ..&gt; Ledger : checks
+    Engine ..&gt; Models : forecasts
+    Engine ..&gt; Data : reads
+    Data ..&gt; Providers : sourced from
+</pre></div>
+<div class="cap">UML component view. Dashed arrow: depends on; filled diamond: composition; solid arrow: writes. Grouping boxes: agent layer, decision engine, storage.</div>
+<div class="grid"><div class="card"><h2>Layers</h2><p><b>Web interface</b> (React 18 + Vite): profile, plan, time machine, stocks, devil's advocate.</p><p><b>API service</b> (FastAPI): signed sessions, validated inputs, one endpoint per screen.</p><p><b>Decision engine</b> (deterministic Python): profile = lower of risk capacity and tolerance (5 levels); each goal capped by its horizon; rule-based allocation; six-risk map; time machine and shocks; devil's advocate rules; data-coverage and liquidity rules; news facts vs opinions.</p><p><b>Forecast models</b>: inflation (ridge vs simple rules), crypto and gold (gradient boosting vs the historical mean), market timing (logistic regression). Shown only as far as their walk-forward tests, fixed in advance, allow.</p></div><div class="card"><h2>Why each agent exists</h2><p><b>Advisor</b> (LLM): turns tool results into an answer at the investor's level. It does not compute: every figure comes from a tool.</p><p><b>Devil's advocate</b> (LLM): challenges the request and the draft (concentration, horizon, recency, hype) and states the counterpoint when the data supports the investor.</p><p><b>Verifier</b> (code, not an LLM): checks every number against its receipt; blocks trade directives, guaranteed returns and certainty. No model approves its own answer.</p><p><b>Orchestrator</b>: fixed order, at most one revision; remaining problems are shown, not hidden.</p></div><div class="card"><h2>One question, end to end</h2><p>1. The interface sends the question with the signed session.</p><p>2. The API loads the investor's profile and simulated plan.</p><p>3. The Advisor calls tools; each result is a numbered receipt (R1, R2, ...).</p><p>4. The Devil's advocate reviews the draft with its own tools.</p><p>5. The Verifier compares every figure with its receipt.</p><p>6. Answer, receipts and verification are shown, and stored as an audit trail.</p></div><div class="card"><h2>Data, explainability, limits</h2><p><b>Data</b>: Yahoo Finance prices converted to CAD with Bank of Canada rates; Bank of Canada, Statistics Canada and FRED series with publication lags; official news read within robots.txt.</p><p><b>Explainability</b>: facts, planning assumptions (FP Canada/IFP 2026) and scenarios are labelled; a model that fails its test shows "Not scored"; assets without enough data are not reviewed.</p><p><b>Limits</b>: five years of starter prices, survivorship bias, incomplete ESG coverage, model uncertainty.</p></div></div>
+<footer><p>Grounded in: web/src, wealthpilot/api.py, wealthpilot/agents/ (orchestrator, tools, verifier, ledger), profile.py, goals.py, strategist.py, risks.py, time_machine.py, advocate.py, coverage.py, news.py, macro_news.py, inflation.py, forecast.py, timing.py, data.py, accounts.py.</p><p><b>Educational simulation: fictitious allocations, no real trades, not personalized financial advice.</b> Live demo: d3pmr84q14pg9z.cloudfront.net</p></footer>
+</body></html>
